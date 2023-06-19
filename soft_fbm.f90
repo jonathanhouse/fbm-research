@@ -187,7 +187,7 @@ PROGRAM soft_fbm
                         config_xxdis(ibin)=config_xxdis(ibin)+1.D0 
 
                         ! record steady-state distribution 
-                        if( (it.ge.NTSTART) .and. (it.le.NTEND)) then
+                        if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
                               xxdis(ibin) = xxdis(ibin) + 1.0D0
                         end if 
 
@@ -206,7 +206,11 @@ PROGRAM soft_fbm
      if (myid.ne.0) then                                                  ! Send data
          call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
          call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
-         call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
+
+         if(WRITEDISTRIB) then
+            call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
+         end if
+
       else
          sumxx(:)=confxx(:)
          sum2xx(:)=conf2xx(:)
@@ -214,10 +218,14 @@ PROGRAM soft_fbm
          do id=1,numprocs-1                                                   ! Receive data
             call MPI_RECV(auxxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
             call MPI_RECV(aux2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
-            call MPI_RECV(auxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
             sumxx(:)=sumxx(:)+auxxx(:) 
             sum2xx(:)=sum2xx(:)+aux2xx(:) 
-            sumdis(:)=sumdis(:)+auxdis(:)
+
+            if(WRITEDISTRIB) then
+                  call MPI_RECV(auxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
+                  sumdis(:)=sumdis(:)+auxdis(:)
+            end if 
+
          enddo
       endif        
 #else          
