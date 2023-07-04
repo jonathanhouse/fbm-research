@@ -171,6 +171,11 @@ PROGRAM soft_fbm
                         grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
                   end if
 
+                  if (myid==0) then
+                        if (iconf==1) then 
+                          write(*,'(F0.3,A,F0.3,A,F0.3,A,F0.3)')  xx(it-1) + xix(it) + force_weight*grad, ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
+                        endif
+                  endif
                   xx(it) = xx(it-1) + xix(it) + force_weight*grad ! walker's new position 
 
                   if ( abs(xx(it)).gt.LBY2 ) then ! reflecting boundaries

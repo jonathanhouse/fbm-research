@@ -55,6 +55,7 @@ def parse_data(file_name,log_type):
 
 def get_data(folder):
     path = loc + '/' + folder
+    avx, dis = None, None
     for dirpaths,dirnames,files in walk(path):
         for f in files:
             type = f[0:3] # first three characters of the data log 
