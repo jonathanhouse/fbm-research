@@ -4,6 +4,10 @@ import numpy as np
 from data_files import DataFile
 from numpy.polynomial.polynomial import Polynomial as Poly
 
+def plot_times(ax,times,top):
+    for t in times:
+        ax.plot(t*np.ones(10),np.linspace(0,top,10))
+
 def msd_fit(ax, data, interval):
 
     bound_arr = data[0].avx['t']
@@ -20,19 +24,19 @@ def msd_fit(ax, data, interval):
         ax.legend()
 
 
-def plot(ax, data, type, label):
+def plot(ax, fig, data, type, label):
 
     if(isinstance(ax,plt.Axes)): 
 
         if(type == 'msd'): 
             ax.set(xscale = 'log', yscale = 'log')
             for p in data: 
-                ax.plot(p.avx['t'], p.avx['<r^2>'],label= label + ' = ' + str(p.get_label(label)))
+                ax.plot(p.avx['t'], p.avx['<r^2>'],label=p.get_label(label))
                 ax.set(xlabel='$t$',ylabel='$\\langle x^2 \\rangle$')
 
         if (type == 'dis'):
             for p in data: 
-                ax.plot(p.dis['x/L'], p.dis['P(x)*L'], label= label + ' = ' + str(p.get_label(label)))
+                ax.plot(p.dis['x/L'], p.dis['P(x)*L'], label= p.get_label(label))
                 ax.set( xlabel='$x/L$',ylabel='$P(x) \\times L$')
 
         ax.legend()
@@ -46,13 +50,20 @@ def plot(ax, data, type, label):
             if(type[i] == 'msd'): 
                 ax[i].set(xscale = 'log', yscale = 'log')
                 for p in data[i]: 
-                    ax[i].plot(p.avx['t'], p.avx['<r^2>'],label= label[i] + ' = ' + str(p.get_label(label[i])))
+                    ax[i].plot(p.avx['t'], p.avx['<r^2>'],label= p.get_label(label[i]))
                     ax[i].set(xlabel='$t$',ylabel='$\\langle x^2 \\rangle$')
 
             if (type[i] == 'dis'):
                 for p in data[i]: 
-                    ax[i].plot(p.dis['x/L'], p.dis['P(x)*L'], label= label[i] + ' = ' + str(p.get_label(label[i])))
+                    ax[i].plot(p.dis['x/L'], p.dis['P(x)*L'], label=p.get_label(label[i]))
                     ax[i].set( xlabel='$x/L$',ylabel='$P(x) \\times L$')
 
             ax[i].legend()
 
+        title = ["nconf","length","gamma","nt","weight","t"]
+        sup = ""
+        for t in title:
+            if t not in label: 
+                sup += str(data[cols-1][0].get_label(t)) + ", "
+        sup = sup[:-2]
+        fig.suptitle(t=sup)
