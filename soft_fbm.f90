@@ -10,7 +10,7 @@ PROGRAM soft_fbm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#define PARALLEL
+!#define PARALLEL
 #define VERSION 'soft_fbm'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -24,21 +24,25 @@ PROGRAM soft_fbm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Simulation parameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
-      integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
-      integer(i4b), parameter     :: NCONF=10000                    ! number of walkers
-      real(r8b), parameter        :: GAMMA = 1.2D0              ! FBM correlation exponent 
-      real(r8b), parameter        :: force_weight = -1.0D0        ! multiplied against density gradient (negative as repelled by density)
+      integer(i4b), parameter     :: M=23,NT=2**M               ! number of time steps (in which mu const) 
+      integer(i4b), parameter     :: NCONF=1                    ! number of walkers
+      real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
+      real(r8b), parameter        :: force_weight = -0.01D0        ! multiplied against density gradient (negative as repelled by density)
 
-      real(r8b),parameter         :: L = 3000.D0                 ! length of interval
+      real(r8b),parameter         :: L = 1000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
       real(r8b), parameter        :: STEPSIG=1.D0             ! sigma of individual step
       character(3)                :: STEPDIS='GAU'                 ! Gaussian = GAU, binary = BIN, box = BOX                   
 
+      real(r8b),parameter         :: lambda = 0.2D0/STEPSIG
+      real(r8b),parameter         :: wall_force = STEPSIG
+      character(4)                :: WALL = 'HARD'
+
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
       integer(i4b), parameter     :: NBIN =  500                   ! number of bins for density distribution
-      integer(i4b), parameter     :: NTSTART=2**(M-1)             ! begin and end of measuring distribution
-      integer(i4b), parameter     :: NTEND=2**M 
+      integer(i4b), parameter     :: NTSTART=0           ! begin and end of measuring distribution
+      integer(i4b), parameter     :: NTEND=500000 
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
             
@@ -142,10 +146,10 @@ PROGRAM soft_fbm
         call gkissinit(IRINIT+iconf-1)
         call corvec(xix,2*NT,M+1,GAMMA)                         ! create x-increments (correlated Gaussian random numbers)
         
-        if (STEPDIS.eq.'BOX') then
-          xix(:) = 1 - (0.5D0*erfcc(xix(:)/sqrt(2.0D0)))                       ! map onto unit inteval
-          xix(:)=xix(:)-0.5D0                                                  ! center around 0
-        endif
+        !if (STEPDIS.eq.'BOX') then
+        !  xix(:) = 1 - (0.5D0*erfcc(xix(:)/sqrt(2.0D0)))                       ! map onto unit inteval
+        ! xix(:)=xix(:)-0.5D0                                                  ! center around 0
+        !endif
         
         if (STEPDIS.eq.'BIN') then 
           xix(:)=sign(1.D0,xix(:))
@@ -161,8 +165,22 @@ PROGRAM soft_fbm
             do it=1, NT
  
                   ibin=nint( xx(it-1)*NBIN/LBY2 ) ! find walker's starting bin 
-                  if( abs(ibin).lt.NBIN ) then ! if within exclusive (-NBIN,NBIN), find gradient by midpoints of ibin-1 and ibin+1
-                        grad = ( config_xxdis(ibin+1) - config_xxdis(ibin-1) ) / (2.D0*LBY2/NBIN)
+                  grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
+                  if( abs(ibin).lt.NBIN ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
+
+                        if ( xix(it) .gt. 0.D0 ) then
+                              grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
+
+                        else if ( xix(it) .lt. 0.D0 ) then
+                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
+                              
+                        else 
+                              grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
+                              if (rkiss05() < 0.5D0) then
+                                    grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
+                              end if 
+                        end if 
+
                   end if 
                   if (ibin.eq.NBIN) then ! if in NBIN, find gradient by midpoint of ibin & ibin-1
                         grad = ( config_xxdis(ibin) - config_xxdis(ibin-1)) / (LBY2/NBIN)
@@ -171,15 +189,23 @@ PROGRAM soft_fbm
                         grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
                   end if
 
-                  if (myid==0) then
-                        if (iconf==1) then 
-                          write(*,'(F0.3,A,F0.3,A,F0.3,A,F0.3)')  xx(it-1) + xix(it) + force_weight*grad, ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
-                        endif
-                  endif
+            !     if (myid==0) then
+            !           if (iconf==1) then 
+            !              write(*,'(F0.3,A,F0.3,A,F0.3,A,F0.3)')  xx(it-1) + xix(it) + force_weight*grad, ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
+            !           endif
+            !      endif
                   xx(it) = xx(it-1) + xix(it) + force_weight*grad ! walker's new position 
+                  if (WALL .eq. 'SOFT') then
+                        xx(it) = xx(it) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
 
-                  if ( abs(xx(it)).gt.LBY2 ) then ! reflecting boundaries
-                        xx(it)=xx(it-1)
+                  else ! WALL .eq. 'HARD'
+                        if ( abs(xx(it)).gt.LBY2 ) then ! stopping boundaries
+                              write(*,'(I0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3)') it,' : ', xx(it-1) + xix(it) + force_weight*grad,&
+                               ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
+                              xx(it)=xx(it-1)
+
+
+                        endif 
                   end if
 
                   confxx(it)=confxx(it) + xx(it)
@@ -329,7 +355,7 @@ PROGRAM soft_fbm
       real(r8b)              :: cr(0:Ns-1)      ! correlation function 
       integer(i4b)           :: is
       
-      integer(i4b)           :: ip(0:2+sqrt(1.*Ns))   ! workspace for FFT code
+      integer(i4b)           :: ip(0:int(2+sqrt(1.*Ns)))   ! workspace for FFT code (added int around second indx)
       real(r8b)              :: w(0:Ns/2-1)           ! workspace for FFT code 
 
       real(r8b)              :: gam                   ! FBM exponent, pass through to correlation function   
