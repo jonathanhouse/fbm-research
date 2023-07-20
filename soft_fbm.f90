@@ -10,7 +10,7 @@ PROGRAM soft_fbm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!#define PARALLEL
+#define PARALLEL
 #define VERSION 'soft_fbm'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -28,6 +28,7 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: NCONF=1                    ! number of walkers
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
       real(r8b), parameter        :: force_weight = -0.01D0        ! multiplied against density gradient (negative as repelled by density)
+      real(r8b), parameter        :: nonlin_scale = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
 
       real(r8b),parameter         :: L = 1000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
@@ -168,13 +169,13 @@ PROGRAM soft_fbm
                   grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
                   if( abs(ibin).lt.NBIN ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
 
-                        if ( xix(it) .gt. 0.D0 ) then
+                        if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
                               grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
 
-                        else if ( xix(it) .lt. 0.D0 ) then
+                        else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
                               grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
                               
-                        else 
+                        else ! else, xx=0, so we flip a coin 
                               grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
                               if (rkiss05() < 0.5D0) then
                                     grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
@@ -194,17 +195,13 @@ PROGRAM soft_fbm
             !              write(*,'(F0.3,A,F0.3,A,F0.3,A,F0.3)')  xx(it-1) + xix(it) + force_weight*grad, ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
             !           endif
             !      endif
-                  xx(it) = xx(it-1) + xix(it) + force_weight*grad ! walker's new position 
+                  xx(it) = xx(it-1) + xix(it) + nonlin_scale*STEPSIG*tanh(force_weight*grad/nonlin_scale) ! walker's new position 
                   if (WALL .eq. 'SOFT') then
                         xx(it) = xx(it) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
 
                   else ! WALL .eq. 'HARD'
                         if ( abs(xx(it)).gt.LBY2 ) then ! stopping boundaries
-                              write(*,'(I0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3)') it,' : ', xx(it-1) + xix(it) + force_weight*grad,&
-                               ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
                               xx(it)=xx(it-1)
-
-
                         endif 
                   end if
 
