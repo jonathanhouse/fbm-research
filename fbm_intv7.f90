@@ -1,4 +1,4 @@
-PROGRAM soft_fbm
+      PROGRAM fbm_intv7
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
 !   time-discrete reflected fractional Brownian motion
@@ -6,12 +6,17 @@ PROGRAM soft_fbm
 !
 !   fbm_intv1   :  21 Dec 2018      first version based on disk program
 !   fbm_intv2   :  23 Dcc 2018      determine distribution over time interval not just at the end
+!   fbm_intv3   :  25 Dec 2018      save RAM and communication by only storing <x> and <x^2> at output times
+!   fbm_intv4   :  26 Aug 2019      use MPI_REDUCE, implement soft wall
+!   fbm_intv5   :  27 Aug 2019      also analyze P(ln(x)) - log scale for x 
+!   fbm_intv6   :  28 Aug 2019      add reflecting boundary, output scaled P in log file
+!   fbm_intv7   :  05 Jul 2022      also implement Hosking method 
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !#define PARALLEL
-#define VERSION 'soft_fbm'
+#define VERSION 'fbm_intv7'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -19,42 +24,40 @@ PROGRAM soft_fbm
       implicit none
       integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
       integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers 
-      integer,parameter      :: i8b= SELECTED_INT_KIND(18)            ! 4-byte integers 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Simulation parameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
-      integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
-      integer(i4b), parameter     :: NCONF=1                    ! number of walkers
-      real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
-
-      real(r8b), parameter        :: force_weight = -0.01D0        ! multiplied against density gradient (negative as repelled by density)
-      real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
-      logical, parameter          :: NONLINEAR_FORCE = .TRUE.
-
-      real(r8b),parameter         :: L = 1500000.D0                 ! length of interval
+      integer(i4b), parameter     :: M=13,NT=2**M               ! number of time steps (in which mu const) 
+      integer(i4b), parameter     :: NCONF=4000                    ! number of walkers
+      real(r8b), parameter        :: GAMMA = 1.2D0              ! FBM correlation exponent 
+      
+      real(r8b),parameter         :: L = 10000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
       real(r8b), parameter        :: STEPSIG=1.D0             ! sigma of individual step
       character(3)                :: STEPDIS='GAU'                 ! Gaussian = GAU, binary = BIN, box = BOX                   
 
-      real(r8b),parameter         :: lambda = 0.2D0/STEPSIG
-      real(r8b),parameter         :: wall_force = STEPSIG
-      character(4)                :: WALL = 'HARD'
+      character(4)                :: WALL='REFL'                  ! SOFT or HARD or REFL     
+      real(r8b),    parameter     :: F0=STEPSIG                      ! amplitude of wall force f=f0*exp(-lam*(r-RMAX))
+      real(r8b),    parameter     :: LAM = 0.2D0/STEPSIG            ! decay constant of wall force            
+      
+      integer(i4b), parameter     :: NOUT = 500                    ! max number of output times, used as dimension of sumarrays  
+      logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
+      integer(i4b), parameter     :: NBIN =   5000                   ! number of bins for density distribution
+      integer(i4b), parameter     :: NLOGBIN =1000                   ! number of bins for log histogram
+      integer(i4b), parameter     :: NTSTART=0.8*(2**M)            ! begin and end of measuring distribution
+      integer(i4b), parameter     :: NTEND=2**M 
 
-      logical,parameter           :: WRITEDISTRIB = .FALSE.        ! write final radial distribution    
-      integer(i4b), parameter     :: NBIN =  750000                   ! number of bins for density distribution
-      integer(i4b), parameter     :: NTSTART=0           ! begin and end of measuring distribution
-      integer(i4b), parameter     :: NTEND=2**26 
-
-      real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
-            
       integer(i4b), parameter     :: IRINIT=1                    ! random number seed
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Internal constants
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       real(r8b), parameter        :: LBY2=L/2
+      real(r8b), parameter        :: LNXMAX= log(L)                    ! max ln(L) for log histogram
+      real(r8b), parameter        :: LNXMIN= log(0.1D0) 
+      real(r8b), parameter        :: DELLNX= LNXMAX - LNXMIN 
       real(r8b), parameter        :: Pi=3.14159265358979323D0
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -63,31 +66,30 @@ PROGRAM soft_fbm
 
       real(r8b)              :: xx(0:NT)                        ! walker coordinates
       real(r8b)              :: xix(1:2*NT)                       ! increments
+      real(r8b)              :: force
 
-      real(r8b)              :: confxx(1:NT)                     ! average of xx after each time step  
-      real(r8b)              :: conf2xx(1:NT)                    
-      real(r8b)              :: sumxx(1:NT),sum2xx(1:NT)         ! sums over machines in MPI version
-      real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
+      integer(i4b)           :: outtime(1:NOUT)                    ! it indices of output times       
+      real(r8b)              :: confxx(1:NOUT)                     ! average of xx after each time step  
+      real(r8b)              :: conf2xx(1:NOUT)                    
+      real(r8b)              :: sumxx(1:NOUT),sum2xx(1:NOUT)         ! sums over machines in MPI version
+      real(r8b)              :: auxxx(1:NOUT),aux2xx(1:NOUT) 
 
-      real(r8b)              :: grad                             ! density gradient 
-      integer(i4b)           :: iconf, it, ibin                       ! configuration, and time counters   
+      integer(i4b)           :: iconf, it, ibin                    ! configuration, and time counters   
+      integer(i4b)           :: itout, itoutmax
       integer(i4b)           :: totconf                         ! actual number of confs
 
-      real(r8b)              :: config_xxdis(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
-      real(r8b)              :: xxdis(-NBIN:NBIN)                ! density histogram 
+      real(r8b)              :: xxdis(-NBIN:NBIN)                    ! density histogram 
       real(r8b)              :: sumdis(-NBIN:NBIN)
-      real(r8b)              :: auxdis(-NBIN:NBIN) 
-      real(r8b)              :: PP,PPsym,x                          ! P(x) 
+      real(r8b)              :: xxlogdis(0:NLOGBIN)                ! density histogram for ln(x)
+      real(r8b)              :: sumlogdis(0:NLOGBIN)
+      real(r8b)              :: PP,PPsym,x,lnx                          ! P(x) 
                         
       external               :: kissinit 
       real(r8b),external     :: rkiss05,erfcc 
 
-      integer(i8b)           :: tlast, tnow, tcount ! used to record time of each configuration
-
-
-
       character(15)          :: avxfile = 'avx00000000.dat'
       character(15)          :: disfile = 'dis00000000.dat' 
+      character(15)          :: logfile = 'log00000000.dat' 
             
 ! Now the MPI stuff !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -119,40 +121,40 @@ PROGRAM soft_fbm
       print *,'--------------------------------------------------'
 #endif 
 
+! Precalculate output times
+      it=1
+      itout=1
+      do while (it.lt.NT)
+         outtime(itout)=it
+         it = max(it+1,int(it*1.05D0))
+         itout=itout+1
+      enddo      
+      itoutmax=itout
+      outtime(itoutmax)=NT 
+
       confxx(:)=0.D0 
       conf2xx(:)=0.D0
       xxdis(:)=0.D0 
-      config_xxdis(:) = 0.D0
+      xxlogdis(:)=0.D0
 
 ! Loop over disorder configurations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef PARALLEL
       disorder_loop: do iconf=myid+1,totconf,numprocs
 !      if (myid==0) print *, 'dis. conf.', iconf
-      if (myid==0) then
-            if (iconf==1) then 
-              call system_clock(tnow,tcount)
-              write(*,'(A,I0,A,I0)') 'dis. conf. ', iconf,' of ', totconf
-            else
-              tlast=tnow
-              call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. conf. ', iconf,' of ',totconf,&
-                ' (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
-            endif
-      endif
-
 #else
       disorder_loop: do iconf=1,totconf
 !         print *, 'dis. conf.', iconf
 #endif 
 
         call gkissinit(IRINIT+iconf-1)
-        call corvec(xix,2*NT,M+1,GAMMA)                         ! create x-increments (correlated Gaussian random numbers)
+!        call corvec(xix,2*NT,M+1,GAMMA)                         ! create x-increments (correlated Gaussian random numbers)
+        call hosking(xix,2*NT,M+1,GAMMA)                         ! create x-increments (correlated Gaussian random numbers)
         
-        !if (STEPDIS.eq.'BOX') then
-        !  xix(:) = 1 - (0.5D0*erfcc(xix(:)/sqrt(2.0D0)))                       ! map onto unit inteval
-        ! xix(:)=xix(:)-0.5D0                                                  ! center around 0
-        !endif
+        if (STEPDIS.eq.'BOX') then
+          xix(:) = 1 - (0.5D0*erfcc(xix(:)/sqrt(2.0D0)))                       ! map onto unit inteval
+          xix(:)=xix(:)-0.5D0                                                  ! center around 0
+        endif
         
         if (STEPDIS.eq.'BIN') then 
           xix(:)=sign(1.D0,xix(:))
@@ -162,117 +164,68 @@ PROGRAM soft_fbm
         
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-            xx(0)=X0
-            config_xxdis(:) = 0.D0
-            config_xxdis(0) = 1.D0
-            do it=1, NT
- 
-                  ibin=nint( xx(it-1)*NBIN/LBY2 ) ! find walker's starting bin 
-                  grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
-                  if( abs(ibin).lt.NBIN ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-
-                        if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
-                              grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
-
-                        else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
-                              
-                        else ! else, xix=0, so we flip a coin 
-                              grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
-                              if (rkiss05() < 0.5D0) then
-                                    grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
-                              end if 
-                        end if 
-
-                  end if 
-                  if (ibin.eq.NBIN) then ! if in NBIN, find gradient by midpoint of ibin & ibin-1
-                        grad = ( config_xxdis(ibin) - config_xxdis(ibin-1)) / (LBY2/NBIN)
-                  end if 
-                  if (ibin.eq.-NBIN) then ! if in -NBIN, find gradient by midpoints of ibin & ibin+1
-                        grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
-                  end if
-
-
-                  !write(*,'(I0.4, A, F0.3,A,F0.3,A,F0.3,A,F0.3)')  it, " : ", &
-                  !xx(it-1) + xix(it) + nonlin_scale*STEPSIG*tanh(force_weight*grad/nonlin_scale), &
-                  !' = ', xx(it-1), ' + ', xix(it), ' + ', nonlin_scale*STEPSIG*tanh(force_weight*grad/nonlin_scale)
-            !     if (myid==0) then
-            !           if (iconf==1) then 
-            !              write(*,'(F0.3,A,F0.3,A,F0.3,A,F0.3)')  xx(it-1) + xix(it) + force_weight*grad, ' = ', xx(it-1), ' + ', xix(it), ' + ', force_weight*grad
-            !           endif
-            !      endif
-
-                  ! calculate walker's new position 
-                  if (NONLINEAR_FORCE) then
-                        xx(it) = xx(it-1) + xix(it) + nonlin_factor*STEPSIG*tanh(force_weight*grad/nonlin_factor) 
-                  else ! gradient force is linear
-                        xx(it) = xx(it-1) + xix(it) + force_weight*grad 
-                  endif 
-
-                  if (WALL .eq. 'SOFT') then
-                        xx(it) = xx(it) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
-
-                  else ! WALL .eq. 'HARD'
-                        if ( abs(xx(it)).gt.LBY2 ) then ! stopping boundaries
-                              xx(it)=xx(it-1)
-                        endif 
-                  end if
-
-                  confxx(it)=confxx(it) + xx(it)
-                  conf2xx(it)=conf2xx(it) + xx(it)*xx(it)
-                  
-                  ibin=nint( xx(it)*NBIN/LBY2 ) ! new walker bin 
-                  if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
-
-                        ! record full time distribution for gradient 
-                        config_xxdis(ibin)=config_xxdis(ibin)+1.D0 
-
-                        ! record steady-state distribution 
-                        if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
-                              xxdis(ibin) = xxdis(ibin) + 1.0D0
-                        end if 
-
-                  end if
-            
-
-
+        xx(0)=X0
+        if ( WALL.eq.'HARD') then                                                ! hard boundaries (particles stops)
+           do it=1, NT
+              xx(it)=xx(it-1)+xix(it)
+              if ( abs(xx(it)).gt.LBY2 ) then                   
+                 xx(it)=xx(it-1)
+              end if
            end do  
+        endif
+        if ( WALL.eq.'REFL') then                                                ! hard boundaries (particle reflected)
+           do it=1, NT
+              xx(it)=xx(it-1)+xix(it)
+              if ( xx(it).gt.LBY2 ) then                   
+                 xx(it)=max(L-xx(it),-LBY2)                                     ! prevent particle from leaving interval
+              end if
+              if ( xx(it).lt.-LBY2 ) then                   
+                 xx(it)=min(-L-xx(it),LBY2)
+              end if
+           end do  
+        endif
+        if ( WALL.eq.'SOFT') then 
+           do it=1, NT
+             force = F0*exp(-LAM*(xx(it-1)+LBY2)) - F0*exp(LAM*(xx(it-1)-LBY2)) 
+             xx(it)=xx(it-1)+xix(it)+force
+           end do  
+        endif
+             
+        do itout=1,itoutmax
+           confxx(itout)=confxx(itout) + xx(outtime(itout))
+           conf2xx(itout)=conf2xx(itout) + xx(outtime(itout))**2
+        enddo
            
-
-      end do disorder_loop      ! of do inconf=1,NCONF
+        if (WRITEDISTRIB) then
+              do it = NTSTART,NTEND                                   ! normal histogram
+                 ibin=nint( xx(it)*NBIN/LBY2 )
+                 if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
+                   xxdis(ibin)=xxdis(ibin)+1.D0 
+                 endif    
+              enddo  
+              do it = NTSTART,NTEND                                   ! log histogram
+                 ibin=nint( ( log(LBY2-xx(it)) - LNXMIN )*NLOGBIN/DELLNX )
+                 if ( (ibin.ge.0) .and. (ibin.le.NLOGBIN)) then
+                   xxlogdis(ibin)=xxlogdis(ibin)+1.D0 
+                 endif    
+              enddo  
+              
+        endif 
+           
+      end do disorder_loop      ! of do incof=1,NCONF
 
 ! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef PARALLEL
-     if (myid.ne.0) then                                                  ! Send data
-         call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
-         call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
-
-         if(WRITEDISTRIB) then
-            call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
-         end if
-
-      else
-         sumxx(:)=confxx(:)
-         sum2xx(:)=conf2xx(:)
-         sumdis(:)=xxdis(:)
-         do id=1,numprocs-1                                                   ! Receive data
-            call MPI_RECV(auxxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
-            call MPI_RECV(aux2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
-            sumxx(:)=sumxx(:)+auxxx(:) 
-            sum2xx(:)=sum2xx(:)+aux2xx(:) 
-
-            if(WRITEDISTRIB) then
-                  call MPI_RECV(auxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
-                  sumdis(:)=sumdis(:)+auxdis(:)
-            end if 
-
-         enddo
-      endif        
+      call MPI_REDUCE(confxx,sumxx,NOUT,MPI_DOUBLE_PRECISION,MPI_SUM,0,MPI_COMM_WORLD,ierr)   
+      call MPI_REDUCE(conf2xx,sum2xx,NOUT,MPI_DOUBLE_PRECISION,MPI_SUM,0,MPI_COMM_WORLD,ierr)   
+      call MPI_REDUCE(xxdis,sumdis,2*NBIN+1,MPI_DOUBLE_PRECISION,MPI_SUM,0,MPI_COMM_WORLD,ierr)      
+      call MPI_REDUCE(xxlogdis,sumlogdis,NLOGBIN+1,MPI_DOUBLE_PRECISION,MPI_SUM,0,MPI_COMM_WORLD,ierr)      
 #else          
       sumxx(:)=confxx(:)
       sum2xx(:)=conf2xx(:)
       sumdis(:)=xxdis(:)
+      sumlogdis(:)=xxlogdis(:)
 #endif
          
 #ifdef PARALLEL
@@ -280,39 +233,35 @@ PROGRAM soft_fbm
 #endif       
         write(avxfile(4:11),'(I8.8)') NT       
         open(2,file=avxfile,status='replace')
-
         write(2,*) 'Program ', VERSION
         write(2,*) 'average displacement of reflected FBM'
-        write(2,*) 'weight on force', force_weight
         write(2,*) 'step distribution ',STEPDIS
         write(2,*) 'STEPSIG=', STEPSIG
         write(2,*) 'GAMMMA=', GAMMA 
         write(2,*) 'NT= ', NT
         write(2,*) 'L=', L
+        write(2,*) 'WALL=', WALL
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
         write (2,*)'=================================='
         write(2,*) '   time         <r>         <r^2>'
-        it=1
-        do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/totconf 
-          it=max(it+1,nint(outtimefac*it))
+        do itout=1,itoutmax
+          Write(2,'(1X,I8,6(2X,E13.6))')  outtime(itout), sumxx(itout)/totconf, sum2xx(itout)/totconf 
         enddo 
         close(2) 
 
       if (WRITEDISTRIB) then
         write(disfile(4:11),'(I8.8)') NT 
-
         open(2,file=disfile,status='replace')
-
         write(2,*) 'Program ', VERSION
-        write(2,*) 'Density distribution over entire NT'
+        write(2,*) 'Density distribution between NTSTART and NTEND'
         write(2,*) 'STEPSIG=', STEPSIG
         write(2,*) 'GAMMMA=', GAMMA 
         write(2,*) 'NT= ', NT
         write(2,*) 'NTSTART= ', NTSTART
         write(2,*) 'NTEND= ', NTEND
         write(2,*) 'L=', L
+        write(2,*) 'WALL=', WALL
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=',totconf
         write (2,*)'=================================='
@@ -321,9 +270,34 @@ PROGRAM soft_fbm
           x= (L/2*ibin)/NBIN
           PP= (sumdis(ibin)*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
           PPsym= ( (0.5D0*sumdis(ibin)+0.5D0*sumdis(-ibin))*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
-          Write(2,'(1X,I8,8(2X,E13.6))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
+          Write(2,'(1X,I7,8(2X,E13.6))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
         enddo 
         close(2) 
+
+        write(logfile(4:11),'(I8.8)') NT 
+        open(2,file=logfile,status='replace')
+        write(2,*) 'Program ', VERSION
+        write(2,*) 'LOg. density distribution between NTSTART and NTEND'
+        write(2,*) 'STEPSIG=', STEPSIG
+        write(2,*) 'GAMMMA=', GAMMA 
+        write(2,*) 'NT= ', NT
+        write(2,*) 'NTSTART= ', NTSTART
+        write(2,*) 'NTEND= ', NTEND
+        write(2,*) 'L=', L
+        write(2,*) 'WALL=', WALL
+        write(2,*) 'IRINIT=',IRINIT
+        write(2,*) 'NCONF=',totconf
+        write(2,*) 'x is measured from the wall'
+        write (2,*)'=================================='
+        write(2,*) '   ilogbin    ln(x)=LNXMIN+ilogbin*DELLNX/NLOGBIN  x=exp(ln(x))   P(ln(x))  P(x)=P(ln(x))/x   x/L    P(x)*L'
+        do ibin=0,NLOGBIN 
+          lnx = LNXMIN+ibin*DELLNX/NLOGBIN
+          x = exp(lnx)
+          PP= (sumlogdis(ibin)*NLOGBIN)/(DELLNX*totconf*(NTEND-NTSTART+1))
+          Write(2,'(1X,I7,8(2X,E13.6))') ibin, lnx, x, PP, PP/x, x/L, PP/x*L
+        enddo 
+        close(2) 
+        
       endif
 
 #ifdef PARALLEL
@@ -335,11 +309,12 @@ PROGRAM soft_fbm
       call MPI_FINALIZE(ierr)
 #endif 
       stop      
-      END PROGRAM soft_fbm
+      END PROGRAM fbm_intv7
+	  
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
-! Subroutine CORVEC(xr,Ns,M)
+! Subroutine CORVEC(xr,Ns,M,gam)
 !
 ! generates a 1d array of Ns Gaussian random numbers xr
 ! correlated according to a (translationally invariant)
@@ -365,7 +340,7 @@ PROGRAM soft_fbm
       real(r8b)              :: cr(0:Ns-1)      ! correlation function 
       integer(i4b)           :: is
       
-      integer(i4b)           :: ip(0:int(2+sqrt(1.*Ns)))   ! workspace for FFT code (added int around second indx)
+      integer(i4b)           :: ip(0:2+sqrt(1.*Ns))   ! workspace for FFT code
       real(r8b)              :: w(0:Ns/2-1)           ! workspace for FFT code 
 
       real(r8b)              :: gam                   ! FBM exponent, pass through to correlation function   
@@ -410,6 +385,83 @@ PROGRAM soft_fbm
       return
       END SUBROUTINE corvec 
       
+	  
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! Subroutine HOSKING(xr,Ns,M,gam)
+!
+! generates a 1d array of Ns Gaussian random numbers xr
+! correlated according to a (translationally invariant)
+! user-supplied correlation function corfunc(is,Ns)
+!
+! uses Hosking method  (Hosking, Water Resource Research 20, 1898 (1984))
+!
+! history
+!      v0.9         05 July 2022:        first version
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+      SUBROUTINE HOSKING(xr,Ns,M,gam)
+      implicit none
+      integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
+      integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers 
+
+      integer(i4b)           :: Ns              ! number of sites, must be power of 2 
+      integer(i4b)           :: M               ! Ns=2^M
+
+      real(r8b)              :: xr(0:Ns-1)      ! random number array  
+      real(r8b)              :: cr(0:Ns-1)      ! correlation function 
+	  
+	  real(r8b)              :: NN(0:Ns-1), DD(0:Ns-1)      ! work space for Hosking
+	  real(r8b)              :: phi(0:Ns-1), phiold(0:Ns-1) ! the index of phi is j in Hoskings paper 
+	  real(r8b)              :: mean, sig2                  ! mean and variance of next random number
+      integer(i4b)           :: is, j                     ! step counters
+      
+ 
+      real(r8b)              :: gam                   ! FBM exponent, pass through to correlation function   
+            
+      real(r8b), external    :: gkiss05,erfcc
+      real(r8b),external     :: fbmcorfunc 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+      if (Ns.ne.2**M) STOP 'Size indices do not match'
+! Calculate covariance function 
+      do is=0,Ns-1 
+         cr(is)= fbmcorfunc(is,Ns,gam) 
+      enddo
+	  sig2=cr(0)
+
+      xr(0)= sqrt(sig2)*gkiss05()
+	  NN(0)=0.D0
+	  DD(0)=1.D0
+
+! Main recursion	  
+	  do is=1,Ns-1
+	     NN(is)= cr(is)
+	     do j=1,is-1
+	        phiold(j)=phi(j)
+			NN(is)=NN(is)-phiold(j)*cr(is-j)
+	     enddo
+		 DD(is)=DD(is-1)-NN(is-1)**2/DD(is-1) 
+		 phi(is)=NN(is)/DD(is)
+		 mean=phi(is)*xr(0)
+		 do j=1,is-1
+		    phi(j)=phiold(j)-phi(is)*phiold(is-j)
+			mean=mean+ phi(j)*xr(is-j)
+		 enddo
+		 sig2=sig2*(1.D0-phi(j)**2)
+		 xr(is)=mean+sqrt(sig2)*gkiss05()
+	  enddo
+	  
+	  
+       
+! Transform from Gaussian distribution to flat distribution on (0,1)      
+!      do is = 0,Ns-1
+!        xr(is) = 1 -  0.5D0*erfcc(xr(is)/sqrt(2.0D0)) 
+!      end do
+      
+      return
+      END SUBROUTINE HOSKING	  
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
