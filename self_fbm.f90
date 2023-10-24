@@ -25,14 +25,16 @@ PROGRAM soft_fbm
 ! Simulation parameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
-      integer(i4b), parameter     :: NCONF=1                    ! number of walkers
-      real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
+      integer(i4b), parameter     :: NCONF=25000                    ! number of walkers
+      real(r8b), parameter        :: GAMMA = 0.6D0              ! FBM correlation exponent 
+      integer(i4b), parameter 	:: WINDOW = 5		     ! WINDOW*2 + 1 is width of window
 
-      real(r8b), parameter        :: force_weight = -0.01D0        ! multiplied against density gradient (negative as repelled by density)
+
+      real(r8b), parameter        :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
-      character(6), parameter     :: FORCE_TYPE = 'nonlin'        ! Nonlinear tanh = 'nonlin', Linear force = 'linear'
+      character(6), parameter     :: FORCE_TYPE = 'linear'        ! Nonlinear tanh = 'nonlin', Linear force = 'linear'
 
-      real(r8b),parameter         :: L = 1500000.D0                 ! length of interval
+      real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
       real(r8b), parameter        :: STEPSIG=1.D0             ! sigma of individual step
@@ -42,9 +44,9 @@ PROGRAM soft_fbm
       real(r8b),parameter         :: wall_force = STEPSIG
       character(4)                :: WALL = 'HARD'
 
-      logical,parameter           :: WRITEDISTRIB = .FALSE.        ! write final radial distribution    
-      integer(i4b), parameter     :: NBIN =  750000                   ! number of bins for density distribution
-      integer(i4b), parameter     :: NTSTART=0           ! begin and end of measuring distribution
+      logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
+      integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
+      integer(i4b), parameter     :: NTSTART=0          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
@@ -69,6 +71,9 @@ PROGRAM soft_fbm
       real(r8b)              :: sumxx(1:NT),sum2xx(1:NT)         ! sums over machines in MPI version
       real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
 
+      real(r8b)		   :: window_mu
+      real(r8b)		   :: window_covar
+
       !real(r8b)              :: local_corr(1:NT)                  ! product of FBM step and gradient step at each time for a conf
       !real(r8b)              :: global_corr, xix_sum, grad_sum                      ! product of sum of FBM steps and sum of gradient steps for a conf
       !real(r8b)              :: sum_local(1:NT),aux_local(1:NT)
@@ -76,7 +81,7 @@ PROGRAM soft_fbm
 
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
-      integer(i4b)           :: iconf, it, ibin                       ! configuration, and time counters   
+      integer(i4b)           :: iconf, it, ibin, w                       ! configuration, and time counters   
       integer(i4b)           :: totconf                         ! actual number of confs
 
       real(r8b)              :: config_xxdis(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
@@ -185,22 +190,28 @@ PROGRAM soft_fbm
  
                   ibin=nint( xx(it-1)*NBIN/LBY2 ) ! find walker's starting bin 
                   grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
+                  window_mu = 0.D0
+                  window_covar = 0.D0
+
                   if( abs(ibin).lt.NBIN ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-
-                        if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
-                              grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
-
-                        else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
-                              
-                        else ! else, xix=0, so we flip a coin 
-                              grad = ( config_xxdis(ibin+1) - config_xxdis(ibin) ) / (LBY2/NBIN)
-                              if (rkiss05() < 0.5D0) then
-                                    grad = ( config_xxdis(ibin) - config_xxdis(ibin-1) ) / (LBY2/NBIN)
-                              end if 
-                        end if 
+			      
+                        !grad = ( config_xxdis(ibin+1) - config_xxdis(ibin-1) ) / (2.D0*LBY2/NBIN) ! symmetric two-point 
+                        window_loop: do w=ibin-WINDOW,ibin+WINDOW
+                              window_mu = window_mu + config_xxdis(w) ! get sum of cummulative distribution in window
+                              window_covar = window_covar + w*config_xxdis(w) ! get covariance between bin and cummulative dist in window
+                        end do window_loop 
+                        window_mu = window_mu/(2*WINDOW+1) ! normalize our sums to get wanted statistics   
+                        window_covar = window_covar/(2*WINDOW+1)
+                        
+                        ! use statistics to fit line with slope grad - 
+                        ! for a window of ibin +/- WINDOW, mean_bin=ibin & var_bin=WINDOW*(WINDOW+1)/3
+                        grad = (window_covar - ibin*window_mu)/( WINDOW*(WINDOW+1)/3.D0 ) 
 
                   end if 
+
+
+                  
+
                   if (ibin.eq.NBIN) then ! if in NBIN, find gradient by midpoint of ibin & ibin-1
                         grad = ( config_xxdis(ibin) - config_xxdis(ibin-1)) / (LBY2/NBIN)
                   end if 
@@ -327,6 +338,7 @@ PROGRAM soft_fbm
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
+	write(2,*) 'WINDOW_WIDTH', 2*WINDOW + 1
         write (2,*)'=================================='
         write(2,*) '   time         <r>         <r^2>'      
         it=1

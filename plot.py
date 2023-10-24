@@ -5,7 +5,7 @@ from data_files import DataFile
 from numpy.polynomial.polynomial import Polynomial as Poly
 
 
-def plot_binned(ax,fig,data, binsize,label,type='linear'):
+def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
     L = data[0].length
     for d in data: 
 
@@ -25,7 +25,7 @@ def plot_binned(ax,fig,data, binsize,label,type='linear'):
             ax.set(xscale='linear',yscale='log')
             ax.set(xlabel='$x^2$',ylabel='$P(x)$')
             bin_mid = bin_mid**2*np.sign(bin_mid)
-        ax.plot(bin_mid,binned,label=d.get_label(label))
+        ax.plot(bin_mid,binned,label=d.get_label(label),linestyle=linestyle)
     ax.legend()
 
     cols = len(data)
@@ -41,7 +41,7 @@ def plot_binned(ax,fig,data, binsize,label,type='linear'):
 
 def ordered_binning(df, binsize):
     px = df.dis["P(x)"]     
-    partitions = int(df.length/binsize)
+    partitions = int(df.nbin*2/binsize)
     binned_dis = np.zeros(shape=int(partitions))
     midpoint_bins = np.zeros(shape=int(partitions))
     for n in range(int(partitions)):
@@ -58,10 +58,12 @@ def plot_times(ax,times,top):
 def msd_fit(ax, data, interval):
 
     bound_arr = data[0].avx['t']
+    low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-10)[0][0]
+    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-10)[0][0]
     for p in data: 
 
-        low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-10)[0][0]
-        high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-10)[0][0]
+
+
         x_test = np.linspace(np.log10(interval[0]),np.log10(interval[1]),100)
 
         series = Poly.fit(np.log10(p.avx['t'][low_bound:high_bound]), np.log10(p.avx['<r^2>'][low_bound:high_bound]), deg=1, window=None)

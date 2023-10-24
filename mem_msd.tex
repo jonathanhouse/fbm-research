@@ -1,0 +1,66 @@
+\documentclass[9pt, tikz,crop,convert={density=200,outext=.png},aps]{standalone}
+
+\usepackage{pgfplots}\pgfplotsset{width=246pt, height=7.5cm, compat=1.9}
+\usetikzlibrary{arrows.meta}
+\usepgfplotslibrary{groupplots}
+
+\definecolor{forestgreen4416044}{RGB}{44,160,44}
+
+\begin{document}
+
+
+
+\begin{tikzpicture}
+
+  \begin{axis}[
+    ymin=0.223086517618176, 
+    ymax=5*10^5, 
+    xmin=0.5, 
+    xmax=1.9*10^4, 
+    xmode=log,
+    ymode=log,
+    ylabel=$ \langle x^2 \rangle $,
+    xlabel=$t$,
+    legend entries={NONE,ORIG,BOTH,$t^{1.8}$, , , ,$t^{0.4}$},
+    legend style={
+      fill opacity=0.8,
+      draw opacity=1,
+      text opacity=1,
+      at={(0.05,0.93)},
+      anchor=north west,
+      draw=black,
+      legend columns=1,
+      font=\small
+    }
+    ]
+
+
+    \addplot[thin,mark=o, mark repeat=10,blue, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/none/gamma=0.2/avx00016384.dat};
+    \addplot[thin,mark=triangle, mark repeat=10,red, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/orig/gamma=0.2/br=0.01/avx00016384.dat};
+    \addplot[thin,mark=x,mark repeat=5,forestgreen4416044, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/both/gamma=0.2/new-run/avx00000016.dat};
+    \addplot[dashdotted,domain=1:1000,black,line width= 1pt] {x^1.8};
+
+
+    \addplot[thin,mark=o, mark repeat=10,blue, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/none/gamma=1.6/avx00016384.dat};
+    \addplot[thin,mark=triangle, mark repeat=10,red, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/orig/gamma=1.6/avx00016384.dat};
+    \addplot[thin,mark=x,mark repeat=5,forestgreen4416044, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/both/gamma=1.6/avx00000016.dat};
+
+    \addplot[dashed,domain=1:10500,black,line width=1pt] {x^0.4};
+
+  
+
+  %\addplot[thick,mark=*,mark repeat=25,black, mark size=1pt] table[x=time, y=<r^2>] {tikz-compat/pure fbm/gamma=0.2/avx00016384.dat};
+  %\addplot[thick,mark=triangle,mark repeat=30,black, mark size=1pt] table[x=time, y=<r^2>] {tikz-compat/pure fbm/gamma=1.6/avx00016384.dat};
+
+ 
+
+
+  \node[align=center, text width=2cm, font=\small] at (rel axis cs:0.88,0.83) {$\alpha=1.8$};
+  \node[align=center, text width=2cm, font=\small] at (rel axis cs:0.88,0.46) {$\alpha=0.4$};
+
+  \end{axis}
+  
+
+\end{tikzpicture}
+
+\end{document}

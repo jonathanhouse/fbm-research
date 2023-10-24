@@ -1,0 +1,48 @@
+\documentclass[tikz,crop,convert={density=200,outext=.png}]{standalone}
+
+\usepackage{pgfplots}\pgfplotsset{width=10cm, height=5cm, compat=1.9}
+\usetikzlibrary{arrows.meta}
+\usepgfplotslibrary{groupplots}
+
+\definecolor{forestgreen4416044}{RGB}{44,160,44}
+
+\begin{document}
+
+
+
+\begin{tikzpicture}
+
+
+
+  \begin{axis}[
+    ymin=0.223086517618176, 
+    ymax=230.673094651451, 
+    xmin=-0.55, 
+    xmax=0.55, 
+    ymode=log,
+    xlabel=$x/L$,
+    ylabel=$P(x)L$,
+    legend entries={ORIG,NONE,BOTH},
+    legend style={
+      fill opacity=0.8,
+      draw opacity=1,
+      text opacity=1,
+      at={(0.5,0.91)},
+      anchor=north,
+      draw=black
+    },
+    ]
+
+  \addplot[thick,red, mark size=1pt] table[x=x/L, y=P(x)*L] {tikz-compat/orig/gamma=0.2/dis.dat};
+  \addplot[thick,forestgreen4416044, mark size=1pt] table[x=x/L, y=P(x)*L] {tikz-compat/none/gamma=0.2/dis.dat};
+  \addplot[thick,blue, mark size=1pt] table[x=x/L, y=P(x)*L] {tikz-compat/both/gamma=0.2/dis.dat};
+
+  %\node[align=center, text width=2cm, font=\small] at (rel axis cs:0.2,0.75) {$\alpha=1.8$};
+  %\node[align=left, text width=2cm, font=\small] at (rel axis cs:0.3,0.90) {$a)$};
+
+  \end{axis}
+
+
+\end{tikzpicture}
+
+\end{document}

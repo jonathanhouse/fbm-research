@@ -1,0 +1,116 @@
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import numpy as np
+
+
+NT = 2**26
+L = 100
+NBIN = 50
+
+
+NTSTART =200000
+NTEND = 2**26
+NWATCH = NTEND - NTSTART + 1
+
+XXNF = 0
+XXNI = 2
+FBMSTEP = 4
+FORCESTEP = 6
+
+pause = False
+
+#path = '../data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/gradient_dx/dx=10/data.out'
+path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2761849.out'
+pos = np.zeros(NT)
+dis = np.zeros(NBIN*2 + 1)
+lby2 = int(L/2)
+
+file_read = open(path,'r').readlines()
+N = len(file_read)
+print("processed file of size",N)
+
+for i in range(N):
+    line = file_read[i].split()
+    if len(line) > 0:
+        if line[0] == 'dis.':
+            offset = i + 1
+            break
+#from data, get list of walker's x pos's
+#
+
+fig, ax = plt.subplots(1,1)
+walker, = ax.plot([0],[0],'ro',markersize=5)
+dis_plot, = ax.plot([],[])
+grad_plot, = ax.plot([],[])
+
+pos[NTSTART] = file_read[NTSTART+offset].split()[XXNI]
+for t in range(0,NTSTART):
+    pos[t] = file_read[t+offset].split()[XXNI]
+    #in_range = (pos[t] < pos[NTSTART] + 1000*NWATCH) and (pos[t] > pos[NTSTART] - 1000*NWATCH)
+    #if(t < NTSTART and in_range): 
+    x = pos[t]
+    ibin = round(x*(NBIN/lby2))
+    if t < 20:
+        print("time: ", t, " at ", ibin)
+    dis[ibin + NBIN] += 1
+
+print("loaded data into position vector")
+ax.set(xlim=[-lby2,lby2],ylim=[0,2*max(dis)])
+
+W = 5
+weight = -0.25
+def animate(t):
+        
+    pos[t+NTSTART+1] = file_read[t+offset+NTSTART+1].split()[XXNI]
+
+    x_t = pos[t + NTSTART]
+    x_t1 =  pos[t + 1 + NTSTART]
+
+    x = pos[t + NTSTART]
+    ibin = round(x*(NBIN/lby2))
+    dis[ibin + NBIN] += 1
+    
+    fbm_step = float(file_read[t+offset+NTSTART].split()[FBMSTEP])
+    force_step = float(file_read[t+offset+NTSTART].split()[FBMSTEP + 2])
+    ax.set(title='t=' + str(t+NTSTART) + "\n" + str(x_t1) + " = " + str(x_t) + " + " + str(fbm_step) + " + " + str(force_step))
+    walker.set(color='red')
+    if isinstance(fbm_step, str):     
+        print(fbm_step)
+
+    if fbm_step < 0:
+        walker.set(color='blue')
+
+    #y_mean = 0
+    #for j in range(x - W, x + W + 1): 
+    #    y_mean += dis[j + lby2]
+    #intc = y_mean/(2*W + 1.) - force_step/weight * x
+    #window = np.arange(x - W, x + W)
+
+
+    walker.set_data(ibin*(lby2/NBIN),dis[ibin+NBIN])
+    #grad_plot.set_data(window, window*force_step/weight + intc)
+    dis_plot.set_data(np.linspace(-lby2,lby2,2*NBIN+1),dis)
+
+    #
+
+def on_click(event):
+    global pause
+    pause ^= True
+
+
+'''
+t_step = NTSTART
+def next_frame():
+    t_step += 1
+    if t_step == NTEND:
+        t_step = NTSTART
+
+#keyboard.on_press_key("right arrow", lambda _:next_frame())
+'''
+
+fig.canvas.mpl_connect('button_press_event',on_click)
+anim = FuncAnimation(fig,animate,frames=NWATCH,interval=1000)
+
+
+
+plt.show()
