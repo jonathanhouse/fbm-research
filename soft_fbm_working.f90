@@ -37,6 +37,8 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: WINDOW = 3		             ! WINDOW*2 + 1 is width of window
       character(4), parameter     :: GRAD_TEST = 'FIT'
       character(4), parameter     :: FORCE_TEST = 'NONE'           ! random weight drawn from uniform dist -> RAND
+      logical, parameter          :: WRITE_OUTPUT = .TRUE.
+
 
       real(r8b),parameter         :: L = 100.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
@@ -382,16 +384,17 @@ PROGRAM soft_fbm
                   conf2xx(it)=conf2xx(it) + xx(it)*xx(it)
                   !xix_sum = xix_sum + xix(it)
                   
+                  if (WRITE_OUTPUT) then
                   if (myid==0) then
                         if (iconf==1) then 
  
-                  write(*,'(F0.3,A,F0.3,A,F0.3,A,F0.3)')  xx(it), ' = ',&
+                  write(*,'(I0.3, A, F0.3,A,F0.3,A,F0.3,A,F0.3)')  it, ' : ', xx(it), ' = ',&
                    xx(it-1), ' + ',xix(it), ' + ', force_step
  
                         endif
                    endif
+                  end if 
 
-                  
                   ibin=nint( xx(it)*NBIN/LBY2 ) ! new walker bin 
 
                   ! update full time distribution for gradient 
