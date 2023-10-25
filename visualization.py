@@ -22,7 +22,7 @@ NEIGHBORDIS = FORCESTEP + 1
 pause = False
 
 #path = '../data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/gradient_dx/dx=10/data.out'
-path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2764123.out'
+path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2764745.out'
 pos = np.zeros(NT)
 dis = np.zeros(NBIN*2 + 1)
 lby2 = int(L/2)
@@ -45,8 +45,9 @@ walker, = ax.plot([0],[0],'ro',markersize=5)
 dis_plot, = ax.plot([],[])
 grad_plot, = ax.plot([],[])
 
-
+error = False
 for t in range(0,NTSTART):
+
     pos[t] = file_read[t+offset].split()[XXNI] # t-1 is needed to grab the first line to fill t=1 spot of pos 
 
 
@@ -59,17 +60,19 @@ for t in range(0,NTSTART):
  # first error at t=2947
     neighbors = np.array(file_read[t+offset].split()[NEIGHBORDIS][1:-1].split(','),dtype=int)
 
-    if (t < 3000): 
-        if (abs(ibin) != NBIN):
-            if( dis[ibin-1 + NBIN] != neighbors[0] or 
-                dis[ibin + NBIN] != neighbors[1] or 
-                dis[ibin+1 + NBIN] != neighbors[2]):
+    if (abs(ibin) != NBIN):
+        if( dis[ibin-1 + NBIN] != neighbors[0] or 
+            dis[ibin + NBIN] != neighbors[1] or 
+            dis[ibin+1 + NBIN] != neighbors[2]):
+                if error == False:
                     print("error at bin ", ibin, " at time ", t)
+                    error = True
 
-                
-        else:
-            if ( dis[ibin + NBIN] != neighbors[1] ):
+    else:
+        if ( dis[ibin + NBIN] != neighbors[1] ):
+            if error == False:
                 print("error at bin ", ibin, " at time ", t, " at wall ", np.sign(ibin)*NBIN)
+                error = True
 
 
 
