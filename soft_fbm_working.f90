@@ -384,7 +384,7 @@ PROGRAM soft_fbm
                   if (myid==0) then
                         if (iconf==1) then 
  
-                  write(*,'(I0.3, A, F0.3,A,F0.3,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ', xx(it), ' = ',&
+                  write(*,'(I0.1, A, F0.7,A,F0.7,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ', xx(it), ' = ',&
                    xx(it-1), ' + ',xix(it), ' + ', force_step, " [", int(config_xxdis(ibin-1)), ",", int(config_xxdis(ibin)), &
                    ",", int(config_xxdis(ibin+1)), "]"
  

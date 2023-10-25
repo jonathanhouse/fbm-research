@@ -17,11 +17,12 @@ XXNF = IT + 2
 XXNI = XXNF + 2
 FBMSTEP = XXNI + 2
 FORCESTEP = FBMSTEP + 2
+NEIGHBORDIS = FORCESTEP + 1
 
 pause = False
 
 #path = '../data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/gradient_dx/dx=10/data.out'
-path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2764119.out'
+path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2764123.out'
 pos = np.zeros(NT)
 dis = np.zeros(NBIN*2 + 1)
 lby2 = int(L/2)
@@ -51,9 +52,26 @@ for t in range(0,NTSTART):
 
     #in_range = (pos[t] < pos[NTSTART] + 1000*NWATCH) and (pos[t] > pos[NTSTART] - 1000*NWATCH)
     #if(t < NTSTART and in_range): 
+
     x = pos[t]
     ibin = round(x*(NBIN/lby2))
     dis[ibin + NBIN] += 1
+ # first error at t=2947
+    neighbors = np.array(file_read[t+offset].split()[NEIGHBORDIS][1:-1].split(','),dtype=int)
+
+    if (t < 3000): 
+        if (abs(ibin) != NBIN):
+            if( dis[ibin-1 + NBIN] != neighbors[0] or 
+                dis[ibin + NBIN] != neighbors[1] or 
+                dis[ibin+1 + NBIN] != neighbors[2]):
+                    print("error at bin ", ibin, " at time ", t)
+
+                
+        else:
+            if ( dis[ibin + NBIN] != neighbors[1] ):
+                print("error at bin ", ibin, " at time ", t, " at wall ", np.sign(ibin)*NBIN)
+
+
 
 print("loaded data into position vector")
 ax.set(xlim=[-lby2,lby2],ylim=[0,2*max(dis)])
