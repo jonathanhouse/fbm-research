@@ -282,7 +282,8 @@ PROGRAM soft_fbm
                   if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
                               
                         ! if our walker is in a well 
-if( (config_xxdis(ibin-1).gt.config_xxdis(ibin)) .and.( config_xxdis(ibin+1).gt.config_xxdis(ibin)) ) then
+                        if( (config_xxdis(ibin-1).gt.config_xxdis(ibin)) .and. & 
+                          ( config_xxdis(ibin+1).gt.config_xxdis(ibin)) ) then
                               grad = -xix(it)/force_weight ! maybe we expect it to stay here
 
                         else ! else, normal asymmetric gradient formula 
@@ -392,10 +393,12 @@ if( (config_xxdis(ibin-1).gt.config_xxdis(ibin)) .and.( config_xxdis(ibin+1).gt.
 
                   
                   ibin=nint( xx(it)*NBIN/LBY2 ) ! new walker bin 
+
+                  ! update full time distribution for gradient 
+                  config_xxdis(ibin)=config_xxdis(ibin)+1.D0 
+
                   if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
 
-                        ! record full time distribution for gradient 
-                        config_xxdis(ibin)=config_xxdis(ibin)+1.D0 
 
                         ! record steady-state distribution 
                         if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then

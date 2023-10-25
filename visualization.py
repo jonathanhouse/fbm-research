@@ -8,7 +8,7 @@ L = 100
 NBIN = 50
 
 
-NTSTART =200000
+NTSTART =2**26-1000
 NTEND = 2**26
 NWATCH = NTEND - NTSTART + 1
 
@@ -20,7 +20,7 @@ FORCESTEP = 6
 pause = False
 
 #path = '../data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/gradient_dx/dx=10/data.out'
-path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2761849.out'
+path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2761864.out'
 pos = np.zeros(NT)
 dis = np.zeros(NBIN*2 + 1)
 lby2 = int(L/2)
@@ -43,15 +43,15 @@ walker, = ax.plot([0],[0],'ro',markersize=5)
 dis_plot, = ax.plot([],[])
 grad_plot, = ax.plot([],[])
 
-pos[NTSTART] = file_read[NTSTART+offset].split()[XXNI]
+
 for t in range(0,NTSTART):
-    pos[t] = file_read[t+offset].split()[XXNI]
+    pos[t] = file_read[(t-1)+offset].split()[XXNI] # t-1 is needed to grab the first line to fill t=1 spot of pos 
+
+
     #in_range = (pos[t] < pos[NTSTART] + 1000*NWATCH) and (pos[t] > pos[NTSTART] - 1000*NWATCH)
     #if(t < NTSTART and in_range): 
     x = pos[t]
     ibin = round(x*(NBIN/lby2))
-    if t < 20:
-        print("time: ", t, " at ", ibin)
     dis[ibin + NBIN] += 1
 
 print("loaded data into position vector")
@@ -61,18 +61,18 @@ W = 5
 weight = -0.25
 def animate(t):
         
-    pos[t+NTSTART+1] = file_read[t+offset+NTSTART+1].split()[XXNI]
+    t_curr = t + NTSTART
+    t_curr_data = file_read[t_curr+offset].split()
 
-    x_t = pos[t + NTSTART]
-    x_t1 =  pos[t + 1 + NTSTART]
+    pos[t_curr] = t_curr_data[XXNI]
+    x_curr =  pos[t_curr]
 
-    x = pos[t + NTSTART]
-    ibin = round(x*(NBIN/lby2))
+    ibin = round(x_curr*(NBIN/lby2))
     dis[ibin + NBIN] += 1
     
-    fbm_step = float(file_read[t+offset+NTSTART].split()[FBMSTEP])
-    force_step = float(file_read[t+offset+NTSTART].split()[FBMSTEP + 2])
-    ax.set(title='t=' + str(t+NTSTART) + "\n" + str(x_t1) + " = " + str(x_t) + " + " + str(fbm_step) + " + " + str(force_step))
+    fbm_step = float(t_curr_data[FBMSTEP])
+    force_step = float(t_curr_data[FBMSTEP + 2])
+    ax.set(title='t=' + str(t+NTSTART) + "\n" + str(t_curr_data[XXNF]) + " = " + str(x_curr) + " + " + str(fbm_step) + " + " + str(force_step))
     walker.set(color='red')
     if isinstance(fbm_step, str):     
         print(fbm_step)
