@@ -19,7 +19,7 @@ PROGRAM soft_fbm
       implicit none
       integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
       integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers 
-      integer,parameter      :: i8b= SELECTED_INT_KIND(18)            ! 4-byte integers 
+      integer,parameter      :: i8b= SELECTED_INT_KIND(18)            ! 8-byte integers 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Simulation parameters
@@ -189,7 +189,7 @@ PROGRAM soft_fbm
 
             xx(0)=X0
             config_xxdis(:) = 0.D0
-            config_xxdis(0) = 1.D0
+            config_xxdis(0) = 1.0D0
             !xix_sum = 0.D0
             !grad_sum = 0.D0
             do it=1, NT
@@ -384,9 +384,9 @@ PROGRAM soft_fbm
                   if (myid==0) then
                         if (iconf==1) then 
  
-                  write(*,'(I0.3, A, F0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3,A)')  it, ' : ', xx(it), ' = ',&
-                   xx(it-1), ' + ',xix(it), ' + ', force_step, "[ ", config_xxdis(ibin-1), ",", config_xxdis(ibin), ",", &
-                   config_xxdis(ibin+1), "]"
+                  write(*,'(I0.3, A, F0.3,A,F0.3,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ', xx(it), ' = ',&
+                   xx(it-1), ' + ',xix(it), ' + ', force_step, " [", int(config_xxdis(ibin-1)), ",", int(config_xxdis(ibin)), &
+                   ",", int(config_xxdis(ibin+1)), "]"
  
                         endif
                    endif
