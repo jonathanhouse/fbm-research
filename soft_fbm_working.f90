@@ -215,7 +215,7 @@ PROGRAM soft_fbm
                               grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
                               if (rkiss05() < 0.5D0) then
                                      grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                    end if 
+                              end if 
                         end if 
 
 
@@ -262,7 +262,7 @@ PROGRAM soft_fbm
                                     grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
                                     if (rkiss05() < 0.5D0) then
                                            grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                          end if 
+                                    end if 
                               end if 
                         end if 
       
@@ -274,8 +274,6 @@ PROGRAM soft_fbm
                               grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
                         end if 
                   end if 
-
-
 
             end if 
 
@@ -310,8 +308,6 @@ PROGRAM soft_fbm
                               grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
                         end if 
                   end if 
-
-
 
             end if 
 
@@ -355,7 +351,7 @@ PROGRAM soft_fbm
 
             if (FORCE_TEST .eq. 'RAND') then 
                   call random_number(force_weight)
-                  force_weight = force_weight*-1
+                  force_weight = force_weight*(-1)
             end if 
 
                  
@@ -388,17 +384,18 @@ PROGRAM soft_fbm
                   if (myid==0) then
                         if (iconf==1) then 
  
-                  write(*,'(I0.3, A, F0.3,A,F0.3,A,F0.3,A,F0.3)')  it, ' : ', xx(it), ' = ',&
-                   xx(it-1), ' + ',xix(it), ' + ', force_step
+                  write(*,'(I0.3, A, F0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3,A,F0.3,A)')  it, ' : ', xx(it), ' = ',&
+                   xx(it-1), ' + ',xix(it), ' + ', force_step, "[ ", config_xxdis(ibin-1), ",", config_xxdis(ibin), ",", &
+                   config_xxdis(ibin+1), "]"
  
                         endif
                    endif
                   end if 
 
-                  ibin=nint( xx(it)*NBIN/LBY2 ) ! new walker bin 
+                  ibin=nint( xx(it)*NBIN/LBY2 ) ! new walker bin s
 
                   ! update full time distribution for gradient 
-                  config_xxdis(ibin)=config_xxdis(ibin)+1.D0 
+                  config_xxdis(ibin)=config_xxdis(ibin)+1.0D0 
 
                   if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
 

@@ -12,15 +12,16 @@ NTSTART =2**26-1000
 NTEND = 2**26
 NWATCH = NTEND - NTSTART + 1
 
-XXNF = 0
-XXNI = 2
-FBMSTEP = 4
-FORCESTEP = 6
+IT = 0
+XXNF = IT + 2
+XXNI = XXNF + 2
+FBMSTEP = XXNI + 2
+FORCESTEP = FBMSTEP + 2
 
 pause = False
 
 #path = '../data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/gradient_dx/dx=10/data.out'
-path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2761864.out'
+path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2764119.out'
 pos = np.zeros(NT)
 dis = np.zeros(NBIN*2 + 1)
 lby2 = int(L/2)
@@ -45,7 +46,7 @@ grad_plot, = ax.plot([],[])
 
 
 for t in range(0,NTSTART):
-    pos[t] = file_read[(t-1)+offset].split()[XXNI] # t-1 is needed to grab the first line to fill t=1 spot of pos 
+    pos[t] = file_read[t+offset].split()[XXNI] # t-1 is needed to grab the first line to fill t=1 spot of pos 
 
 
     #in_range = (pos[t] < pos[NTSTART] + 1000*NWATCH) and (pos[t] > pos[NTSTART] - 1000*NWATCH)
@@ -72,7 +73,7 @@ def animate(t):
     
     fbm_step = float(t_curr_data[FBMSTEP])
     force_step = float(t_curr_data[FBMSTEP + 2])
-    ax.set(title='t=' + str(t+NTSTART) + "\n" + str(t_curr_data[XXNF]) + " = " + str(x_curr) + " + " + str(fbm_step) + " + " + str(force_step))
+    ax.set(title='t=' + str(t+NTSTART) +" (" + str(t_curr_data[IT]) + "\n" + str(t_curr_data[XXNF]) + " = " + str(x_curr) + " + " + str(fbm_step) + " + " + str(force_step))
     walker.set(color='red')
     if isinstance(fbm_step, str):     
         print(fbm_step)
@@ -81,7 +82,7 @@ def animate(t):
         walker.set(color='blue')
 
     #y_mean = 0
-    #for j in range(x - W, x + W + 1): 
+    #for j in range(x - W, x + W + 1):  
     #    y_mean += dis[j + lby2]
     #intc = y_mean/(2*W + 1.) - force_step/weight * x
     #window = np.arange(x - W, x + W)
