@@ -569,7 +569,7 @@ PROGRAM soft_fbm
                     <|xix_pos|>      <|f_grad_pos|>     <xix_pos*f_grad_pos>/<|xix_pos|>*<|f_grad_pos|>'
         it=1
         do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sum2xx(it)/totconf, sum_xix_pos2(it)/totconf,&
+          Write(2,'(1X,I8,7(2X,E13.6))')  it, sum2xx(it)/totconf, sum_xix_pos2(it)/totconf,&
                                           sum_grad_pos2(it)/totconf, sum_covar(it)/totconf,&
                                           sum_xix_pos(it)/totconf, sum_grad_pos(it)/totconf,&
                                           (sum_covar(it)/totconf)/(sum_xix_pos(it)*sum_grad_pos(it)/totconf**2)
