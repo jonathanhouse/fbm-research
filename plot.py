@@ -75,6 +75,21 @@ def msd_fit(ax, data, interval):
         ax.legend()
 
 
+def log_fit(ax,data_x,data_y,interval):
+    bound_arr = data_x
+    low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-10)[0][0]
+    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-10)[0][0]
+
+    x_test = np.linspace(np.log10(interval[0]),np.log10(interval[1]),100)
+    series = Poly.fit(np.log10(data_x[low_bound:high_bound]), np.log10(data_y[low_bound:high_bound]), deg=1, window=None)
+    series = series.convert()
+
+    ax.plot(10**x_test, 10**series(x_test),marker='x',markersize=3,label=series)
+    ax.legend()
+
+    return series 
+
+
 
 def plot(ax, fig, data, type, label,marker=None,xlim=None,markersize=None,linestyle=None,ylim=None):
 

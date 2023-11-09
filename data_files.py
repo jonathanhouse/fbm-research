@@ -8,12 +8,17 @@ class DataFile:
         self.path = path
         self.weight, self.gamma, self.length, self.nconf, self.nt, self.nbin = 0,0,0,0,0,0
         self.series = ""
+        self.avx, self.dis, self.log, self.cor = None, None, None, None
         if(type == 'base'):
             self.avx, self.dis, self.log,self.cor = self.get_data(self.path)
         if(type == 'grad'):
             self.avx, self.dis, self.log = self.get_grad_data(self.path)
         if(type == 'fast hosking'):
             self.avx, self.dis, self.log = self.get_fast_hosking_data(self.path)
+        if(type == 'avx'):
+            self.avx = self.get_avx(self.path)
+        if(type == 'cor'):
+            self.cor = self.get_cor(self.path)
 
 
     def parse_data(self, file_name,log_type):
@@ -53,7 +58,7 @@ class DataFile:
         if log_type == 'log':
             run_data = np.empty((7,N),float)
         if log_type == 'cor':
-            run_data = np.empty((4,N),float)
+            run_data = np.empty((8,N),float)
 
         for i in range(N):
             run_data[:,i] = run_read[i+offset].split()
@@ -86,9 +91,13 @@ class DataFile:
 
         if log_type == 'cor': 
             data_dict['t'] = run_data[0,:]
-            data_dict['<fbm_step*force_step>'] = run_data[1,:]
-            data_dict['<|force_step|>'] = run_data[2,:]
-            data_dict['<fbm_step*force_step>/<|force_step|>'] = run_data[3,:]
+            data_dict['<r^2>'] = run_data[1,:]
+            data_dict['<xix_pos^2>'] = run_data[2,:]
+            data_dict['<f_grad_pos^2>'] = run_data[3,:]
+            data_dict['<xix_pos*f_grad_pos>'] = run_data[4,:]
+            data_dict['<|xix_pos|>'] = run_data[5,:]
+            data_dict['<|grad_pos|>'] = run_data[6,:]
+            data_dict['norm(<xix_pos*f_grad_pos>)'] = run_data[7,:]
 
         return data_dict
 
@@ -108,6 +117,31 @@ class DataFile:
                     cor = self.parse_data(path + '/' + f, 'cor')
 
         return avx, dis, log, cor
+
+
+    def get_avx(self,folder):
+        path = loc + '/' + folder
+        avx = None
+        for dirpaths,dirnames,files in walk(path):
+            for f in files:
+                type = f[0:3] # first three characters of the data log 
+                if type == 'avx':
+                    avx = self.parse_data(path + '/' + f,'avx')
+
+        return avx
+    
+    def get_cor(self,folder):
+        path = loc + '/' + folder
+        cor = None
+        for dirpaths,dirnames,files in walk(path):
+            for f in files:
+                type = f[0:3] # first three characters of the data log 
+                if type == 'cor':
+                    avx = self.parse_data(path + '/' + f,'cor')
+
+        return cor
+    
+
 
     def get_label(self, label):
             if label == 'gamma':
