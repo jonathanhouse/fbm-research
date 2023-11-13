@@ -11,7 +11,7 @@ PROGRAM soft_fbm
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #define PARALLEL
-#define VERSION 'soft_fbm'
+#define VERSION 'Soft bfBM Parallel v1'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -25,9 +25,13 @@ PROGRAM soft_fbm
 ! Simulation parameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
-      integer(i4b), parameter     :: NCONF=25000                    ! number of walkers
+     
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
-      
+      integer(i4b), parameter     :: NSETS = 2500
+      integer(i4b), parameter     :: WALKS_PER_SET = 10 
+      integer(i4b), parameter     :: NCONF=NSETS*WALKS_PER_SET                    ! number of walkers
+
+
 
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
@@ -87,8 +91,8 @@ PROGRAM soft_fbm
 
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
-      integer(i4b)           :: iconf, it, ibin, w                       ! configuration, and time counters   
-      integer(i4b)           :: totconf                         ! actual number of confs
+      integer(i4b)           :: iconf, it, ibin, w, iset                       ! configuration, and time counters   
+      integer(i4b)           :: totconf,totsets                         ! actual number of confs
 
       real(r8b)              :: config_xxdis(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
 
@@ -97,6 +101,8 @@ PROGRAM soft_fbm
       real(r8b), allocatable   :: auxdis(:) 
       real(r8b)                :: PP,PPsym,x                          ! P(x) 
                         
+      real(r8b), allocatable   :: walkers_xix(:,:)
+
       external               :: kissinit 
       real(r8b),external     :: rkiss05,erfcc 
 
@@ -125,14 +131,14 @@ PROGRAM soft_fbm
       call MPI_INIT(ierr)
       call MPI_COMM_RANK( MPI_COMM_WORLD, myid, ierr )
       call MPI_COMM_SIZE( MPI_COMM_WORLD, numprocs, ierr )
-      totconf=(NCONF/numprocs)*numprocs
+      totsets=(SETS/numprocs)*numprocs ! sets are 
       
       if (myid==0) then
          print *,'Program ',VERSION,' runing on', numprocs, ' processes'
          print *,'--------------------------------------------------'
       endif ! of if (myid==0)
 #else
-      totconf=NCONF
+      !totconf=NCONF
       print *,'Program ',VERSION,' runing on single processor'
       print *,'--------------------------------------------------'
 #endif 
@@ -146,44 +152,51 @@ PROGRAM soft_fbm
       conf2xx(:)=0.D0
       config_xxdis(:) = 0.D0
       
+      allocate(walkers_xix(1:WALKS_PER_SET,1:2*NT))
+      walkers_xix(:,:) = 0.D0
+
       !global_corr = 0.D0
       !local_corr(:) = 0.D0
 
 ! Loop over disorder configurations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef PARALLEL
-      disorder_loop: do iconf=myid+1,totconf,numprocs
+      disorder_loop: do iset=myid+1,totset,numprocs
 !      if (myid==0) print *, 'dis. conf.', iconf
       if (myid==0) then
-            if (iconf==1) then 
+            if (isetf==1) then 
               call system_clock(tnow,tcount)
-              write(*,'(A,I0,A,I0)') 'dis. conf. ', iconf,' of ', totconf
+              write(*,'(A,I0,A,I0)') 'dis. set ', iset,' of ', totsets
             else
               tlast=tnow
               call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. conf. ', iconf,' of ',totconf,&
+              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. conf. ', iset,' of ',totsets,&
                 ' (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
             endif
       endif
 
 #else
-      disorder_loop: do iconf=1,totconf
+      disorder_loop: do iset=1,totsets
 !         print *, 'dis. conf.', iconf
 #endif 
 
-        call gkissinit(IRINIT+iconf-1)
-        call corvec(xix,2*NT,M+1,GAMMA)                         ! create x-increments (correlated Gaussian random numbers)
+      xix_generating_loop: do i=0,WALKS_PER_SET
+            iconf = iset*WALKS_PER_SET - (WALKS_PER_SET-1) + i
+            call gkissinit(IRINIT+iconf-1)
+            call corvec(xix(i,:),2*NT,M+1,GAMMA)  ! create x-increments (correlated Gaussian random numbers)
+            xix(i,:) = xix(i,:)*STEPSIG
+      enddo xix_generating_loop
         
         !if (STEPDIS.eq.'BOX') then
         !  xix(:) = 1 - (0.5D0*erfcc(xix(:)/sqrt(2.0D0)))                       ! map onto unit inteval
         ! xix(:)=xix(:)-0.5D0                                                  ! center around 0
         !endif
         
-        if (STEPDIS.eq.'BIN') then 
-          xix(:)=sign(1.D0,xix(:))
-        endif  
+        !if (STEPDIS.eq.'BIN') then 
+        !  xix(:)=sign(1.D0,xix(:))
+        !endif  
         
-        xix(:)=xix(:)*STEPSIG                               ! scale increments to correct sigma 
+        !xix(:)=xix(:)*STEPSIG                               ! scale increments to correct sigma 
         
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
