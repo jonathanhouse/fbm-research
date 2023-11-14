@@ -1,18 +1,4 @@
- Program jh_bfbm
- Log. density distribution between NTSTART and NTEND
- STEPSIG=   1.0000000000000000     
- GAMMMA=  0.20000000000000001     
- BRANCHPROB=   1.0000000000000000E-002
- MEMORY=BOTH
- NT=        16384
- NTSTART=        11468
- NTEND=        16384
- L=   1061.0000000000000     
- IRINIT=           1
- NCONF=        4992
- x is measured from the wall
- ==================================
-    ilogbin ln(x)=LNXMIN+ilogbin*DELLNX/NLOGBIN  x=exp(ln(x)) P(ln(x))  P(x)=P(ln(x))/x   x/L  P(x)*L  var  err
+    ilogbin ln(x)=LNXMIN+ilogbin*DELLNX/NLOGBIN  x  P(x)   x/L  P(x)*L  var  err
        0  -0.230259E+01   0.100000E+00   0.176959E+00   0.176959E+01   0.942507E-04   0.187753E+04   0.120592E+02   0.367461E-02
        1  -0.220989E+01   0.109713E+00   0.183077E+00   0.166870E+01   0.103405E-03   0.177049E+04   0.121297E+02   0.368534E-02
        2  -0.211719E+01   0.120369E+00   0.190433E+00   0.158208E+01   0.113449E-03   0.167858E+04   0.121935E+02   0.369502E-02

@@ -1,37 +1,119 @@
 from data_files import DataFile 
 import matplotlib.pyplot as plt 
 import numpy as np
-from plot import plot, msd_fit, plot_times, plot_binned
+from plot import plot, msd_fit, plot_times, plot_binned, log_fit
 from numpy.polynomial.polynomial import Polynomial as Poly
 import tikzplotlib as tz 
 
 
-'''
-x1 = DataFile("data/linear force/gamma=1.0/weight=-unifom[0,0.5]/nt=2**26/L=100/asymmetric gradient/")
-x2 = DataFile("data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/mixed gradient/nbin=50/")
-x3 = DataFile("data/nonlinear force/prefactor=0.25/gamma=1.0/weight=-0.25/L=100/asymmetric gradient/nbin=100/")
-x4 = DataFile("data/nonlinear force/prefactor=1.0/gamma=1.0/weight=-0.25/nt=2**26/L=100/nbin=50/mixed gradient/")
-x5 = DataFile("data/linear force/gamma=1.0/weight=0.0/nt=2**23/L=10M")
+fig,ax = plt.subplots(1,1)
+y = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm pos & force pos/symmetric gradient/nbin=50M")
+x = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm pos & force pos/asymmetric gradient/nbin=50M")
 
-fig,ax =  plt.subplots(1,1)
+x1 = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm & force steps/asymmetric gradient/nbin=5M")
+y1 = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm & force steps/symmetric gradient/nbin=5M")
 
-ax.plot(x1.dis["x/L"],x1.dis["P(x)*L"],label='-uniform[0,0.5],asym,nbin=50')
-ax.plot(x2.dis["x/L"],x2.dis["P(x)*L"],label='weight=-0.25,mixed gradient,nbin=50')
-ax.plot(x3.dis["x/L"],x3.dis["P(x)*L"],label='nonlinear=0.25,weight=-0.25,asym,nbin=100')
-ax.plot(x4.dis["x/L"],x4.dis["P(x)*L"],label='nonlinear=1.0,weight=-0.25,mixed,nbin=50')
+g1_w5_steps = DataFile("data/linear force/gamma=1.0/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad steps /asymmetric gradient")
+g6_w5_steps = DataFile("data/linear force/gamma=0.6/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad steps/asymmetric gradient")
+g6_w5_pos = DataFile("data/linear force/gamma=0.6/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad pos/asymmetric gradient")
+g1_w5_pos = DataFile("data/linear force/gamma=1.0/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad pos/asymmetric gradient")
 
-ax.set(xlabel='x/L',ylabel='P(x)*L')
+ax.set(xlabel='t')
 
+ax.set(xscale='log',yscale='log')
 
-fig.suptitle("nconf=25K, L=100, $\gamma=1.0$")
+fig.suptitle('nbin/LBY2=1, weight=-0.5, nconf=25K, $\gamma=1.0$, asymmetric gradient')
+#ax.plot(x.cor['t'],(x.cor['<r^2>']))
 
+pos = g6_w5_pos.cor
+
+ax.plot(pos['t'],pos['<r^2>'],label='<r^2>')
+ax.plot(pos['t'],pos['<xix_pos^2>'],label='<xix_pos^2>')
+ax.plot(pos['t'],pos['<f_grad_pos^2>'],label='<f_grad_pos^2>')
+ax.plot(pos['t'],(pos['<xix_pos*f_grad_pos>']),label='<xix_pos*f_grad_pos>')
+
+ax.plot(pos['t'],pos['<|xix_pos|>'],label='<|xix_pos|>')
+ax.plot(pos['t'],pos['<|grad_pos|>'],label='<|grad_pos|>')
+
+141
+y = np.linspace(10**-2,10**11,1000)
+x = 141*np.ones(np.size(y))
+ax.plot(x,y,label='t=141')
 ax.legend()
+#log_fit(ax,g1_w5_steps.cor['t'],g1_w5_steps.cor['<|grad_pos|>'],interval=[8980384,60412582])
 '''
 
-x10 = DataFile("../bfbm/data/organized_bfbm/orig/gamma=1.3",type='grad')
+
+ax.plot(y.cor['t'],(y.cor['<r^2>']),label='asymmetric gradient <r^2>',linestyle='--' )
+ax.plot(y.cor['t'],(y.cor['<xix_pos^2>']),label='asymmetric gradient <xix_pos^2>' ,linestyle='--')
+ax.plot(y.cor['t'],(y.cor['<f_grad_pos^2>']),label='asymmetric gradient <f_grad_pos^2>' ,linestyle='--')
+ax.plot(y.cor['t'],(y.cor['<xix_pos*f_grad_pos>']),label='asymmetric gradient <xix_pos*f_grad_pos>' ,linestyle='--')
+'''
+
+'''
+ax.plot(x.cor['t'],(x.cor['<r^2>']),label='<r^2>')
+ax.plot(x.cor['t'],(x.cor['<xix_pos^2>']),label='<xix_pos^2>')
+ax.plot(x.cor['t'],(x.cor['<f_grad_pos^2>']),label='<f_grad_pos^2>' )
+ax.plot(x.cor['t'],(x.cor['<xix_pos*f_grad_pos>']),label='<xix_pos*f_grad_pos>')
+
+ax.plot(x1.cor['t'],(x1.cor['<|xix_pos|>']),label='<|xix_step|>' )
+ax.plot(x1.cor['t'],(x1.cor['<|grad_pos|>']),label='<|f_grad_step|>' )
+
+y = np.linspace(1e-3,1e11,10)
+ax.plot(22878*np.ones(np.size(y)),y,label='t=22878; <|xix_step|> & <|f_grad_step|> intersection')
+
+y = np.linspace(1e-3,1e11,10)
+ax.plot(6.75e6*np.ones(np.size(y)),y,label='t=6.75e6; <xix_pos^2> & <f_grad_pos^2> intersection')
+'''
+
+#series = log_fit(ax,x1.cor['t'],x1.cor['<|grad_pos|>'],interval=[461,41717])
+#series = log_fit(ax,x1.cor['t'],x1.cor['<|grad_pos|>'],interval=[6350091,60412582])
+
+'''
+ax.plot(y.cor['t'],(y.cor['<xix_pos^2>']),label='<xix_pos^2>; symmetric')
+ax.plot(y.cor['t'],(y.cor['<f_grad_pos^2>']),label='<f_grad_pos^2>; symmetric')
+ax.plot(y.cor['t'],(y.cor['<xix_pos*f_grad_pos>']),label='<xix_pos*f_grad_pos>; symmetric')
+
+ax.plot(y1.cor['t'],(y1.cor['<|xix_pos|>']),label='<|xix_pos|>; symmetric' )
+ax.plot(y1.cor['t'],(y1.cor['<|grad_pos|>']),label='<|f_grad_pos|>; symmetric' )
+
+'''
+
+
+
+
+'''
+
+
+
+L100M_data = DataFile("data/linear force/gamma=0.4/weight=-0.25/nt=2**26/L=100M/nbin=50M/asymmetric gradient/intv=[2**26]",'avx')
+#L10M_asym_data = DataFile("data/linear force/gamma=0.4/weight=-0.25/nt=2**26/L=10M/")
+L10M_sym_data = DataFile("data/linear force/gamma=0.4/weight=-0.25/nt=2**26/L=10M/nbin=5M/asymmetric gradient",'avx')
+
+
+bm_data = DataFile("data/linear force/gamma=0.4/weight=0.0/nt=2**26/L=10M")
+
+
 
 fig,ax = plt.subplots(1,1)
 
+fig.suptitle("nt=" + str(bm_data.nt) + ", nconf=" + str(bm_data.nconf) + ", $\gamma$=0.4" + ", weight=" + str(L100M_data.weight))
+
+msd_fit(ax,[L100M_data],[25400363,42718147])
+msd_fit(ax,[bm_data],[25400363,42718147])
+
+ax.set(xscale='log',yscale='log')
+
+ax.plot(L100M_data.avx["t"],L100M_data.avx["<r^2>"],label='L=100M,asymmetric gradient : ' + str(L100M_data.series))
+#ax.plot(L10M_asym_data.avx["t"],L10M_asym_data.avx["<r^2>"],label='L=10M,asymmetric gradient')
+ax.plot(L10M_sym_data.avx["t"],L10M_sym_data.avx["<r^2>"],label='L=10M,asymmetric gradient')
+ax.plot(bm_data.avx["t"], bm_data.avx["<r^2>"],label='pure FBM : ' + str(bm_data.series)) 
+
+ax.set(xlabel='t',ylabel='<r^2>')
+'''
+
+ax.legend()
+'''
 interval=[0.106280E+01, 0.121193E+01]
 bound_arr = x10.log['x']
 low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-10)[0][0]
@@ -62,6 +144,7 @@ y2 = -2.26197158 - 0.15888054*x
 
 ax.set(xscale='log',yscale='log')
 ax.legend()
+'''
 
 
 #ax.plot(x10.dis["x/L"],x10.dis["P(x)*L"],label='nbin=' + str(x10.nbin))

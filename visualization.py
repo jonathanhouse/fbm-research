@@ -4,8 +4,8 @@ import numpy as np
 
 
 NT = 2**26
-L = 100
-NBIN = 50
+L = 1500000
+NBIN = 750000
 
 
 NTSTART =2**26-1000
@@ -22,7 +22,7 @@ NEIGHBORDIS = FORCESTEP + 1
 pause = False
 
 #path = '../data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/gradient_dx/dx=10/data.out'
-path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=100/asymmetric gradient/fill test/stay-in-bin/Foundry-2764745.out'
+path = '../data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=1.5M/new output/mixed gradient /nbin=750K/Foundry-2772471.out'
 pos = np.zeros(NT)
 dis = np.zeros(NBIN*2 + 1)
 lby2 = int(L/2)

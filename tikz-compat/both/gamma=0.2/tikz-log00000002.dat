@@ -1,4 +1,4 @@
-   ilogbin    ln(x)=LNXMIN+ilogbin*DELLNX/NLOGBIN  x=exp(ln(x))   P(ln(x))  P(x)=P(ln(x))/x   x/L    P(x)*L
+   ilogbin    ln(x)=LNXMIN+ilogbin*DELLNX/NLOGBIN  x   P(ln(x))  P(x)   x/L    P(x)*L
        0  -0.230259E+01   0.100000E+00   0.789109E+00   0.789109E+01   0.714286E-04   0.110475E+05
        1  -0.220712E+01   0.110017E+00   0.839639E+00   0.763188E+01   0.785838E-04   0.106846E+05
        2  -0.211165E+01   0.121038E+00   0.879903E+00   0.726963E+01   0.864559E-04   0.101775E+05

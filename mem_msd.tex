@@ -21,12 +21,12 @@
     ymode=log,
     ylabel=$ \langle x^2 \rangle $,
     xlabel=$t$,
-    legend entries={NONE,ORIG,BOTH,$t^{1.8}$, , , ,$t^{0.4}$},
+    legend entries={NONE,ORIG,BOTH,$t^{1.8}$, , , ,$t^{0.4}$, $t^{1.0}$},
     legend style={
       fill opacity=0.8,
       draw opacity=1,
       text opacity=1,
-      at={(0.05,0.93)},
+      at={(0.05,0.96)},
       anchor=north west,
       draw=black,
       legend columns=1,
@@ -37,15 +37,16 @@
 
     \addplot[thin,mark=o, mark repeat=10,blue, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/none/gamma=0.2/avx00016384.dat};
     \addplot[thin,mark=triangle, mark repeat=10,red, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/orig/gamma=0.2/br=0.01/avx00016384.dat};
-    \addplot[thin,mark=x,mark repeat=5,forestgreen4416044, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/both/gamma=0.2/new-run/avx00000016.dat};
+    \addplot[thin,mark=x,mark repeat=3,forestgreen4416044, mark size=3pt] table[x=time, y=<r^2>] {tikz-compat/both/gamma=0.2/new-run/avx00000016.dat};
     \addplot[dashdotted,domain=1:1000,black,line width= 1pt] {x^1.8};
 
 
     \addplot[thin,mark=o, mark repeat=10,blue, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/none/gamma=1.6/avx00016384.dat};
     \addplot[thin,mark=triangle, mark repeat=10,red, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/orig/gamma=1.6/avx00016384.dat};
-    \addplot[thin,mark=x,mark repeat=5,forestgreen4416044, mark size=2pt] table[x=time, y=<r^2>] {tikz-compat/both/gamma=1.6/avx00000016.dat};
+    \addplot[thin,mark=x,mark repeat=10,forestgreen4416044, mark size=3pt] table[x=time, y=<r^2>] {tikz-compat/both/gamma=1.6/avx00016384.dat};
 
     \addplot[dashed,domain=1:10500,black,line width=1pt] {x^0.4};
+    \addplot[solid,domain=1:10500,black,line width=1pt] {x};
 
   
 

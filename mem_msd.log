@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.9.29)  20 OCT 2023 00:49
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.9.29)  27 OCT 2023 08:01
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -585,27 +585,27 @@ PGFPlots: reading {tikz-compat/orig/gamma=0.2/br=0.01/avx00016384.dat}
 PGFPlots: reading {tikz-compat/both/gamma=0.2/new-run/avx00000016.dat}
 PGFPlots: reading {tikz-compat/none/gamma=1.6/avx00016384.dat}
 PGFPlots: reading {tikz-compat/orig/gamma=1.6/avx00016384.dat}
-PGFPlots: reading {tikz-compat/both/gamma=1.6/avx00000016.dat}
+PGFPlots: reading {tikz-compat/both/gamma=1.6/avx00016384.dat}
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <7> on input line 61.
+(Font)              <7> on input line 62.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <5> on input line 61.
+(Font)              <5> on input line 62.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <9> on input line 61.
+(Font)              <9> on input line 62.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <6> on input line 61.
+(Font)              <6> on input line 62.
 [1
 
 {/usr/local/texlive/2023/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
 (./mem_msd.aux) ) 
 Here is how much of TeX's memory you used:
- 23381 strings out of 476025
- 628996 string characters out of 5790017
- 1878388 words of memory out of 5000000
- 43475 multiletter control sequences out of 15000+600000
+ 23385 strings out of 476025
+ 629076 string characters out of 5790017
+ 1881388 words of memory out of 5000000
+ 43479 multiletter control sequences out of 15000+600000
  514110 words of font info for 38 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 117i,18n,118p,775b,2166s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 117i,18n,118p,775b,2168s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfont
 s/cm/cmmi10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts
 /cm/cmmi6.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/c
@@ -614,7 +614,7 @@ cmr10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cm
 r6.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.
 pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb
 ></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
-Output written on mem_msd.pdf (1 page, 84482 bytes).
+Output written on mem_msd.pdf (1 page, 85927 bytes).
 PDF statistics:
  51 PDF objects out of 1000 (max. 8388607)
  31 compressed objects within 1 object stream
