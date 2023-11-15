@@ -11,7 +11,7 @@ PROGRAM soft_fbm
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #define PARALLEL
-#define VERSION 'Soft FBM Parallel v1'
+#define VERSION 'Soft FBM Parallel (procs as walkers)'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -183,7 +183,7 @@ PROGRAM soft_fbm
             if (iset == 1) then
                   call system_clock(tnow,tcount)
                   write(*,'(A,I0,A,I0,A,I0,A,I0,A)') 'dis. set ', iset,'/', NSETS,&
-                   ' with ', totwalks_in_set, '/', totconf, 'walkers'
+                   ' with ', totwalks_in_set, '/', totconf, ' walkers'
             else
                   tlast=tnow
                   call system_clock(tnow)
@@ -292,6 +292,7 @@ PROGRAM soft_fbm
                   else ! WALL .eq. 'HARD'
                         if ( abs(temp_xx(iwalker)).gt.LBY2 ) then ! stopping boundaries
                               temp_xx(iwalker) = temp_xx(iwalker) - xix(it) - force_step  ! undo the step just taken 
+                              print *, 'Walker at t=', it, ' reached the wall.'
                         endif 
                   end if
 
