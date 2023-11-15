@@ -160,8 +160,8 @@ PROGRAM soft_fbm
 
       set_history(:) = 0.D0 
       
-      allocate(temp_xx(1:totwalks_in_set/numprocs)) ! keep track of position for all walkers handled on a proc
-      allocate(walkers_xix(1:totwalks_in_set/numprocs,1:2*NT)) ! keep track of walkers FBM steps in a given set
+      allocate(temp_xx(1:int(totwalks_in_set/numprocs))) ! keep track of position for all walkers handled on a proc
+      allocate(walkers_xix(1:int(totwalks_in_set/numprocs),1:2*NT)) ! keep track of walkers FBM steps in a given set
 
       !global_corr = 0.D0
       !local_corr(:) = 0.D0
@@ -182,7 +182,8 @@ PROGRAM soft_fbm
       if (myid==0) then
             if (iset == 1) then
                   call system_clock(tnow,tcount)
-                  write(*,'(A,I0,A,I0,A,I0,A)') 'dis. set ', iset,' of ', NSETS, ' with ', totwalks_in_set, ' walkers.'
+                  write(*,'(A,I0,A,I0,A,I0,A,I0)') 'dis. set ', iset,' of ', NSETS,&
+                   ' with ', totwalks_in_set, ' walkers of ', totconf
             else
                   tlast=tnow
                   call system_clock(tnow)
@@ -215,7 +216,7 @@ PROGRAM soft_fbm
             ! for each proc at this time step, we want to find it's walkers contribution to our set history dist 
             temp_history(:) = 0.D0 
 
-            walks_on_proc: do iwalker=1,totwalks_in_set/numprocs
+            walks_on_proc: do iwalker=1,int(totwalks_in_set/numprocs)
 
                   !! 1. calculate current bin for iwalker !!
                   ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) 
@@ -331,7 +332,7 @@ PROGRAM soft_fbm
             if (myid .eq. 0) then 
                   set_history(:) = set_history(:) + temp_history(:)
                   do id=1,numprocs-1
-                        CALL MPI_RECV(temp_history,2*NBIN+1, MPI_DOUBLE_PRECISION, id, 1, MPI_COMM_WORLD, ierr)
+                        CALL MPI_RECV(temp_history,2*NBIN+1, MPI_DOUBLE_PRECISION, id, 1, MPI_COMM_WORLD,status, ierr)
                         set_history(:) = set_history(:) + temp_history(:)
                   end do 
 
@@ -350,7 +351,7 @@ PROGRAM soft_fbm
                   end do 
             !! children receive new set_histroy from parent !! 
             else if (myid .ne. 0) then
-                  call MPI_RECV(set_history,2*NBIN+1,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
+                  call MPI_RECV(set_history,2*NBIN+1,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,status,ierr)
             end if 
 
       end do time_loop
