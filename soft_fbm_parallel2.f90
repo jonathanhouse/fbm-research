@@ -27,7 +27,7 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
      
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
-      integer(i4b), parameter     :: NSETS = 2500
+      integer(i4b), parameter     :: NSETS = 10
       integer(i4b), parameter     :: NWALKS_IN_SET = 200 
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_IN_SET                    ! number of walkers
 
@@ -44,7 +44,7 @@ PROGRAM soft_fbm
       logical, parameter          :: WRITE_OUTPUT = .FALSE.
 
 
-      real(r8b),parameter         :: L = 100.D0                 ! length of interval
+      real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
       real(r8b), parameter        :: STEPSIG=1.D0             ! sigma of individual step
@@ -55,7 +55,7 @@ PROGRAM soft_fbm
       character(4)                :: WALL = 'HARD'
 
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
-      integer(i4b), parameter     :: NBIN =  50                   ! number of bins for density distribution
+      integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
       integer(i4b), parameter     :: NTSTART=2**26-1000          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
 
@@ -95,7 +95,7 @@ PROGRAM soft_fbm
       integer(i4b)           :: totconf,totwalks_in_set                         ! actual number of confs
 
       real(r8b)               :: set_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
-      real(r8b)               :: temp_history(-NBIN:NBIN)
+      !real(r8b)               :: temp_history(-NBIN:NBIN)
       real(r8b), allocatable  :: temp_xx(:)
       real(r8b), allocatable  :: walkers_xix(:,:)
 
@@ -182,8 +182,8 @@ PROGRAM soft_fbm
       if (myid==0) then
             if (iset == 1) then
                   call system_clock(tnow,tcount)
-                  write(*,'(A,I0,A,I0,A,I0,A,I0)') 'dis. set ', iset,' of ', NSETS,&
-                   ' with ', totwalks_in_set, ' walkers of ', totconf
+                  write(*,'(A,I0,A,I0,A,I0,A,I0,A)') 'dis. set ', iset,'/', NSETS,&
+                   ' with ', totwalks_in_set, '/', totconf, 'walkers'
             else
                   tlast=tnow
                   call system_clock(tnow)
@@ -214,7 +214,7 @@ PROGRAM soft_fbm
       time_loop: do it=1, NT
  
             ! for each proc at this time step, we want to find it's walkers contribution to our set history dist 
-            temp_history(:) = 0.D0 
+            !temp_history(:) = 0.D0 
 
             walks_on_proc: do iwalker=1,int(totwalks_in_set/numprocs)
 
@@ -313,9 +313,9 @@ PROGRAM soft_fbm
 
 
                   !! 5. find walker's new bin from calculated position & increment necessary distributions !! 
-                  ibin=nint( temp_xx(iwalker)*NBIN/LBY2 )
+                  !ibin=nint( temp_xx(iwalker)*NBIN/LBY2 )
 
-                  temp_history(ibin)=temp_history(ibin)+1.0D0 
+                  !temp_history(ibin)=temp_history(ibin)+1.0D0 
 
                   if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
                         if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
@@ -330,15 +330,26 @@ PROGRAM soft_fbm
 
             !! parent receives temp histories from each process, and sums with current set_history !! 
             if (myid .eq. 0) then 
-                  set_history(:) = set_history(:) + temp_history(:)
+
+                  do iwalker=1,int(totwalks_in_set/numprocs) 
+                        ibin=nint( temp_xx(iwalker)*NBIN/LBY2 )
+                        set_history(ibin) = set_history(ibin) + 1.D0
+                  end do
+
+                  !set_history(:) = set_history(:) + temp_history(:)
                   do id=1,numprocs-1
-                        CALL MPI_RECV(temp_history,2*NBIN+1, MPI_DOUBLE_PRECISION, id, 1, MPI_COMM_WORLD,status, ierr)
-                        set_history(:) = set_history(:) + temp_history(:)
+                        CALL MPI_RECV(temp_xx,int(totwalks_in_set/numprocs), MPI_DOUBLE_PRECISION, id, &
+                                                                        1, MPI_COMM_WORLD,status, ierr)
+                        do iwalker=1,int(totwalks_in_set/numprocs) 
+                              ibin=nint( temp_xx(iwalker)*NBIN/LBY2 )
+                              set_history(ibin) = set_history(ibin) + 1.D0
+                        end do
+                        !set_history(:) = set_history(:) + temp_history(:)
                   end do 
 
             !! children send temp histories to parent !! 
             else if (myid .ne. 0) then
-                  call MPI_SEND(temp_history,2*NBIN+1,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
+                  call MPI_SEND(temp_xx,int(totwalks_in_set/numprocs),MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
             end if 
 
             !! wait until all machines have sent their temp histories to parent, and parent has parsed them all !!
