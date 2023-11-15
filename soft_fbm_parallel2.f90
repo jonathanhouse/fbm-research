@@ -319,6 +319,10 @@ PROGRAM soft_fbm
                   conf2xx(it)=conf2xx(it) + temp_xx(iwalker)*temp_xx(iwalker)
             end do 
 
+            if (myid == 0) then 
+                  write(*,'(A, I0)') 'it=', it
+            end if 
+
             end do time_loop
            
            !global_corr = global_corr + xix_sum*grad_sum
