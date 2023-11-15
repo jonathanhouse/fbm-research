@@ -28,8 +28,8 @@ PROGRAM soft_fbm
      
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
       integer(i4b), parameter     :: NSETS = 2500
-      integer(i4b), parameter     :: WALKS_PER_SET = 10 
-      integer(i4b), parameter     :: NCONF=NSETS*WALKS_PER_SET                    ! number of walkers
+      integer(i4b), parameter     :: NWALKS_IN_SET = 200 
+      integer(i4b), parameter     :: NCONF=NSETS*NWALKS_IN_SET                    ! number of walkers
 
 
 
@@ -39,9 +39,9 @@ PROGRAM soft_fbm
       character(4), parameter     :: GRAD_FORM = 'ASYM'           ! asymmetric gradient -> ASYM; symmetric gradient -> SYMM
       integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
       integer(i4b), parameter     :: WINDOW = 3		             ! WINDOW*2 + 1 is width of window
-      character(4), parameter     :: GRAD_TEST = 'FIT'
+      character(4), parameter     :: GRAD_TEST = 'NONE'
       character(4), parameter     :: FORCE_TEST = 'NONE'           ! random weight drawn from uniform dist -> RAND
-      logical, parameter          :: WRITE_OUTPUT = .TRUE.
+      logical, parameter          :: WRITE_OUTPUT = .FALSE.
 
 
       real(r8b),parameter         :: L = 100.D0                 ! length of interval
@@ -73,13 +73,13 @@ PROGRAM soft_fbm
 ! variables
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-      real(r8b)              :: xx(0:NT)                        ! walker coordinates
+      !real(r8b)              :: xx(0:NT)                        ! walker coordinates
       real(r8b)              :: xix(1:2*NT)                       ! increments
 
       real(r8b)              :: confxx(1:NT)                     ! average of xx after each time step  
       real(r8b)              :: conf2xx(1:NT)                    
       real(r8b)              :: sumxx(1:NT),sum2xx(1:NT)         ! sums over machines in MPI version
-      real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
+      !real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
 
       real(r8b)		   :: window_mu, bin_mu, bin_mu2
       real(r8b)		   :: window_covar
@@ -91,26 +91,25 @@ PROGRAM soft_fbm
 
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
-      integer(i4b)           :: iconf, it, ibin, w, iset, iwalker                       ! configuration, and time counters   
-      integer(i4b)           :: totconf,totsets                         ! actual number of confs
+      integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i                       ! configuration, and time counters   
+      integer(i4b)           :: totconf,totwalks_in_set                         ! actual number of confs
 
-      real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
-      real(r8b)              :: temp_history(-NBIN:NBIN)
-      real(r8b)              :: temp_xx(1:WALKS_PER_SET)
+      real(r8b)               :: set_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
+      real(r8b)               :: temp_history(-NBIN:NBIN)
+      real(r8b), allocatable  :: temp_xx(:)
+      real(r8b), allocatable  :: walkers_xix(:,:)
 
       real(r8b), allocatable   :: xxdis(:)                ! density histogram 
       real(r8b), allocatable   :: sumdis(:)
-      real(r8b), allocatable   :: auxdis(:) 
+      !real(r8b), allocatable   :: auxdis(:) 
       real(r8b)                :: PP,PPsym,x                          ! P(x) 
-                        
-      real(r8b), allocatable   :: walkers_xix(:,:)
 
       external               :: kissinit 
       real(r8b),external     :: rkiss05,erfcc 
 
       integer(i8b)           :: tlast, tnow, tcount ! used to record time of each configuration
 
-
+      
 
       character(15)          :: avxfile = 'avx00000000.dat'
       character(15)          :: disfile = 'dis00000000.dat' 
@@ -133,7 +132,10 @@ PROGRAM soft_fbm
       call MPI_INIT(ierr)
       call MPI_COMM_RANK( MPI_COMM_WORLD, myid, ierr )
       call MPI_COMM_SIZE( MPI_COMM_WORLD, numprocs, ierr )
-      totsets=(NSETS/numprocs)*numprocs ! sets are 
+
+      !! actual number of walkers/set is an integer multiple of numprocs, likewise for totconf
+      totwalks_in_set=(NWALKS_IN_SET/numprocs)*numprocs 
+      totconf = totwalks_in_set*NSETS
       
       if (myid==0) then
          print *,'Program ',VERSION,' running on', numprocs, ' processes'
@@ -146,16 +148,20 @@ PROGRAM soft_fbm
 #endif 
 
       if(WRITEDISTRIB) then 
-            allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN),auxdis(-NBIN:NBIN))
+            allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN))
+            !allocate(auxdis(-NBIN:NBIN))
             xxdis(:) = 0.D0
+            sumdis(:) = 0.D0
+            !auxdis(:) = 0.D0
       endif 
 
       confxx(:)=0.D0 
       conf2xx(:)=0.D0
-      conf_history(:) = 0.D0
+
+      set_history(:) = 0.D0 
       
-      allocate(walkers_xix(1:WALKS_PER_SET,1:2*NT)) ! allocate 2D array to store walker's FBM steps  
-      walkers_xix(:,:) = 0.D0
+      allocate(temp_xx(1:totwalks_in_set/numprocs)) ! keep track of position for all walkers handled on a proc
+      allocate(walkers_xix(1:totwalks_in_set/numprocs,1:2*NT)) ! keep track of walkers FBM steps in a given set
 
       !global_corr = 0.D0
       !local_corr(:) = 0.D0
@@ -163,55 +169,57 @@ PROGRAM soft_fbm
 ! Loop over disorder configurations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef PARALLEL
-      disorder_loop: do iset=myid+1,totsets,numprocs
-!      if (myid==0) print *, 'dis. conf.', iconf
+
+      !!! PERFORM SETS OF WALKS WITH NWALKS_IN_SET walkers !!!
+      set_loop: do iset=1,NSETS 
+
+      !!! BEFORE EACH SET BEGINS IN EACH PROC WE MUST: 
+      set_history(:) = 0.D0 ! 1. clear the set_history 
+      set_history(0) = 0.D0 ! 2. init the starting distribution 
+      temp_xx(:) = 0.D0 ! 3. init starting positions for all walkers in a proc 
+
+      
       if (myid==0) then
-            if (iset==1) then 
-              call system_clock(tnow,tcount)
-              write(*,'(A,I0,A,I0)') 'dis. set ', iset,' of ', totsets
+            if (iset == 1) then
+                  call system_clock(tnow,tcount)
+                  write(*,'(A,I0,A,I0,A,I0,A)') 'dis. set ', iset,' of ', NSETS, ' with ', totwalks_in_set, ' walkers.'
             else
-              tlast=tnow
-              call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. conf. ', iset,' of ',totsets,&
+                  tlast=tnow
+                  call system_clock(tnow)
+                  write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. conf. ', iset,' of ',NSETS,&
                 ' (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
-            endif
+            end if 
       endif
 
 #else
-      disorder_loop: do iset=1,totsets
+      !disorder_loop: do iwalker=1,totwalks_in_set
 !         print *, 'dis. conf.', iconf
 #endif 
 
-      !!!!!!!!! For every walker in a set, compute their FBM steps over full time !!!!!!!!!
-      xix_generating_loop: do iwalker=1,WALKS_PER_SET
-            iconf = iset*WALKS_PER_SET - (WALKS_PER_SET-1) + (iwalker-1) ! find unique iconf number for each walker 
+      !!! FOR EVERY WALKER IN A PROC, CALCULATE AND SAVE ITS FBM NOISE !!! 
+      i = 1
+      init_xix_loop: do iwalker=myid+1,totwalks_in_set,numprocs
 
+            iconf = iset*totwalks_in_set - (totwalks_in_set-1) + (iwalker-1) ! find unique iconf number for each walker 
             call gkissinit(IRINIT+iconf-1) 
             call corvec(xix,2*NT,M+1,GAMMA)  ! create x-increments (correlated Gaussian random numbers)
             xix(:) = xix(:)*STEPSIG
-            walkers_xix(iwalker,:) = xix(:) ! store xix increments for each walker 
+            walkers_xix(i,:) = xix(:)
+            i = i + 1 
 
-      enddo xix_generating_loop
-        
-      if (myid .eq. 0) then 
-            write(*,'(A)') 'Completed generating xix for all walkers in set'
-      end if 
-! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      end do init_xix_loop
 
-            !xx(0)=X0
-            conf_history(:) = 0.D0 ! Before each set, clear the conf_history 
-            conf_history(0) = 0.0D0 ! Initialize starting distribution 
-            temp_xx(:) = 0.D0 ! Initialize starting positions for all walkers 
-            !xix_sum = 0.D0
-            !grad_sum = 0.D0
-
-            
-            time_loop: do it=1, NT
+      !!! TIME LOOP !!!  
+      time_loop: do it=1, NT
  
-            temp_history(:) = 0.D0 ! after each time step, reset the temp history stored
-            walkers_in_set: do iwalker=1,WALKS_PER_SET
+            ! for each proc at this time step, we want to find it's walkers contribution to our set history dist 
+            temp_history(:) = 0.D0 
 
-                  ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! calculate starting bin for iwalker 
+            walks_on_proc: do iwalker=1,totwalks_in_set/numprocs
+
+                  !! 1. calculate current bin for iwalker !!
+                  ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) 
+
                   grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
 		      window_mu = 0.D0
 		      bin_mu = 0.D0
@@ -220,30 +228,30 @@ PROGRAM soft_fbm
 
                   xix(it) = walkers_xix(iwalker,it) ! store current walkers FBM step here 
 
-                  !!!!!!!!!! Calculate the gradient for a time step !!!!!!!!!
+                  !! 2. calculate gradient for iwalker from full-time set_history !!
                   if( (GRAD_FORM .eq. 'ASYM') .and. (GRAD_TEST .eq. 'NONE') ) then
 
                         if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
                                     
                               if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
-                                    grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
+                                    grad = ( set_history(ibin+GRAD_DX) - set_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
             
                               else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
-                                    grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
+                                    grad = ( set_history(ibin) - set_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
                                           
                               else ! else, xix=0, so we flip a coin 
-                                    grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
+                                    grad = ( set_history(ibin+GRAD_DX) - set_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
                                     if (rkiss05() < 0.5D0) then
-                                          grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
+                                          grad = ( set_history(ibin) - set_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
                                     end if 
                               end if 
 
 
                         else ! we're in region where calculating gradient towards wall walks off distribution
                               if (ibin .gt. 0) then ! we're at right wall
-                                    grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
+                                    grad = ( set_history(ibin) - set_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
                               else ! we're at left wall 
-                                    grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
+                                    grad = ( set_history(ibin+GRAD_DX) - set_history(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
                               end if 
                         end if 
 
@@ -253,20 +261,20 @@ PROGRAM soft_fbm
                   if(GRAD_FORM .eq. 'SYMM') then
 
                         if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-                              grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*2.D0*LBY2/NBIN)
+                              grad = ( set_history(ibin+GRAD_DX) - set_history(ibin-GRAD_DX) ) / (GRAD_DX*2.D0*LBY2/NBIN)
                               
                         else ! we're in region where calculating gradient towards wall walks off distribution
                               if (ibin .gt. 0) then ! we're at right wall
-                                    grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
+                                    grad = ( set_history(ibin) - set_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
                               else ! we're at left wall 
-                                    grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
+                                    grad = ( set_history(ibin+GRAD_DX) - set_history(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
                               end if 
                         end if 
 
                   end if 
 
 
-                  !!!!!!!!!! Calculate walker's gradient term step !!!!!!!!!!!
+                  !! 3. calculate the step contribution from gradient term !! 
                   if (FORCE_TYPE .eq. 'NONLIN') then
                         force_step = nonlin_factor*STEPSIG*tanh(force_weight*grad/nonlin_factor) 
 
@@ -274,8 +282,8 @@ PROGRAM soft_fbm
                         force_step = force_weight*grad 
                   endif 
 
+                  !! 4. find and save walker's new position !! 
                   temp_xx(iwalker) = temp_xx(iwalker) + xix(it) + force_step
-                  !local_corr(it) = force_step*xix(it) + local_corr(it)
 
                   if (WALL .eq. 'SOFT') then
                         !temp_xx(iwalker) = temp_xx(iwalker) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
@@ -285,90 +293,102 @@ PROGRAM soft_fbm
                               temp_xx(iwalker) = temp_xx(iwalker) - xix(it) - force_step  ! undo the step just taken 
                         endif 
                   end if
+
+                  confxx(it)=confxx(it) + temp_xx(iwalker)
+                  conf2xx(it)=conf2xx(it) + temp_xx(iwalker)*temp_xx(iwalker)
                   
+
                   if (WRITE_OUTPUT) then
-                  if (myid==0) then
-                        if (iconf==1) then 
+                        if (myid==0) then
  
-                  write(*,'(I0.1, A, F0.7,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ', xx(it), ' = ',&
-                   xx(it-1), ' + ',xix(it), ' + ', force_step, " [", int(conf_history(ibin-1)), ",", int(conf_history(ibin)), &
-                   ",", int(conf_history(ibin+1)), "]"
+                   !write(*,'(I0.1, A, F0.7,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ',&
+                   !xx(it), ' = ',&
+                   !xx(it-1), ' + ',xix(it), ' + ', force_step, " [",&
+                   !int(set_history(ibin-1)), ",", int(set_history(ibin)), &
+                   !",", int(set_history(ibin+1)), "]"
  
                         endif
                    endif
-                  end if 
 
-                  ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! new walker bin s
 
-                  ! update full history distribution for gradient calculation
+                  !! 5. find walker's new bin from calculated position & increment necessary distributions !! 
+                  ibin=nint( temp_xx(iwalker)*NBIN/LBY2 )
+
                   temp_history(ibin)=temp_history(ibin)+1.0D0 
 
                   if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
-                        ! record steady-state distribution 
                         if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
-                              xxdis(ibin) = xxdis(ibin) + 1.0D0
+                              xxdis(ibin) = xxdis(ibin) + 1.0D0 ! build steady-state distribution 
                         end if 
                   end if
+                  
+            end do walks_on_proc
 
-            end do walkers_in_set
 
-            conf_history(:) = conf_history(:) + temp_history(:) ! after all steps have been taken, update new history distribution
+            !!! AFTER TIME LOOP, WE MUST UPDATE FULL-TIME SET_HISTORY DISTRIBUTION !!! 
 
-            do iwalker=1,WALKS_PER_SET
-                  confxx(it)=confxx(it) + temp_xx(iwalker)
-                  conf2xx(it)=conf2xx(it) + temp_xx(iwalker)*temp_xx(iwalker)
-            end do 
+            !! parent receives temp histories from each process, and sums with current set_history !! 
+            if (myid .eq. 0) then 
+                  set_history(:) = set_history(:) + temp_history(:)
+                  do id=1,numprocs-1
+                        CALL MPI_RECV(temp_history,2*NBIN+1, MPI_DOUBLE_PRECISION, id, 1, MPI_COMM_WORLD, ierr)
+                        set_history(:) = set_history(:) + temp_history(:)
+                  end do 
 
-            if (myid == 0) then 
-                  write(*,'(A, I0)') 'it=', it
+            !! children send temp histories to parent !! 
+            else if (myid .ne. 0) then
+                  call MPI_SEND(temp_history,2*NBIN+1,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
             end if 
 
-            end do time_loop
-           
-           !global_corr = global_corr + xix_sum*grad_sum
+            !! wait until all machines have sent their temp histories to parent, and parent has parsed them all !!
+            call MPI_BARRIER(MPI_COMM_WORLD, ierr) 
 
+            !! parent sends back new set_history to each of the procs !! 
+            if (myid .eq. 0) then
+                  do id=1, numprocs-1
+                        call MPI_SEND(set_history,2*NBIN+1,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,ierr)
+                  end do 
+            !! children receive new set_histroy from parent !! 
+            else if (myid .ne. 0) then
+                  call MPI_RECV(set_history,2*NBIN+1,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
+            end if 
 
-      end do disorder_loop      ! of do inconf=1,NCONF
+      end do time_loop
+
+end do set_loop  
 
 ! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef PARALLEL
-     if (myid.ne.0) then                                                  ! Send data
-         call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
-         call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
+
+      !! for children, send data arrays to parent !! 
+     if (myid.ne.0) then                                                 
+         call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
+         call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,4,MPI_COMM_WORLD,ierr)
 
          if(WRITEDISTRIB) then
-            call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
+            call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,5,MPI_COMM_WORLD,ierr)
          end if
 
-         !call MPI_SEND(global_corr,1,MPI_DOUBLE_PRECISION,0,4,MPI_COMM_WORLD,ierr)
-         !call MPI_SEND(local_corr,NT,MPI_DOUBLE_PRECISION,0,5,MPI_COMM_WORLD,ierr)
-
+      !! for parent: 
       else
-         sumxx(:)=confxx(:)
-         sum2xx(:)=conf2xx(:)
-         sumdis(:)=xxdis(:)
+            !! add it's data to the sum !! 
+            sumxx(:)=confxx(:)
+            sum2xx(:)=conf2xx(:)
+            sumdis(:)=xxdis(:)
 
-         !sum_global = global_corr
-         !sum_local(:) = local_corr(:)
+         !! receive data from each child, and add it to the data sum !! 
+            do id=1,numprocs-1                                                  
+                  call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
+                  call MPI_RECV(conf2xx,NT,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)
+                  sumxx(:)=sumxx(:)+confxx(:) 
+                  sum2xx(:)=sum2xx(:)+conf2xx(:) 
 
-         do id=1,numprocs-1                                                   ! Receive data
-            call MPI_RECV(auxxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
-            call MPI_RECV(aux2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
-            sumxx(:)=sumxx(:)+auxxx(:) 
-            sum2xx(:)=sum2xx(:)+aux2xx(:) 
-
-            if(WRITEDISTRIB) then
-                  call MPI_RECV(auxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
-                  sumdis(:)=sumdis(:)+auxdis(:)
-            end if 
-
-            !call MPI_RECV(aux_global,1,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)
-            !call MPI_RECV(aux_local,NT,MPI_DOUBLE_PRECISION,id,5,MPI_COMM_WORLD,status,ierr)
-            !sum_global = sum_global + aux_global
-            !sum_local(:) = sum_local(:) + aux_local(:)
-
-         enddo
+                  if(WRITEDISTRIB) then
+                        call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,5,MPI_COMM_WORLD,status,ierr)
+                        sumdis(:)=sumdis(:)+xxdis(:)
+                  end if 
+            enddo
       endif        
 #else          
       sumxx(:)=confxx(:)
