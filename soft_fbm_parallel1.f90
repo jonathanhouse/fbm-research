@@ -194,7 +194,7 @@ PROGRAM soft_fbm
       enddo xix_generating_loop
         
       if (myid .eq. 0) then 
-            print *, 'set ', iset, ' completed generating FBM steps'
+            write(*,'(A,I0,A)') 'set ', iset, ': finished generating fbm steps'
       end if 
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -325,6 +325,14 @@ PROGRAM soft_fbm
 
 
       end do disorder_loop      ! of do inconf=1,NCONF
+
+      if (myid==0) then
+              tlast=tnow
+              call system_clock(tnow)
+              write(*,'(A,I0,A,I0,A,F0.3,A)') 'finished all ', totsets,&
+                'sets (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
+            endif
+      endif
 
 ! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
