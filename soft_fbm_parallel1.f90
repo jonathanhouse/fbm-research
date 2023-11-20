@@ -146,7 +146,7 @@ PROGRAM soft_fbm
 #endif 
 
       if(WRITEDISTRIB) then 
-            allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN),auxdis(-NBIN:NBIN))
+            allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN))
             xxdis(:) = 0.D0
       endif 
 
@@ -194,7 +194,7 @@ PROGRAM soft_fbm
       enddo xix_generating_loop
         
       if (myid .eq. 0) then 
-            print *, 'set ', iset, ': completed generating FBM steps'
+            print *, 'set ', iset, ' completed generating FBM steps'
       end if 
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -359,7 +359,7 @@ PROGRAM soft_fbm
             sum2xx(:)=sum2xx(:)+conf2xx(:)
 
             if(WRITEDISTRIB) then
-                  call MPI_RECV(xxdis(:),2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
+                  call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
                   sumdis(:)=sumdis(:)+xxdis(:)
             end if 
 
