@@ -27,8 +27,8 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
      
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
-      integer(i4b), parameter     :: NSETS = 2500
-      integer(i4b), parameter     :: NWALKS_PER_SET = 10 
+      integer(i4b), parameter     :: NSETS = 64
+      integer(i4b), parameter     :: NWALKS_PER_SET = 64 
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
@@ -39,12 +39,12 @@ PROGRAM soft_fbm
       character(4), parameter     :: GRAD_FORM = 'ASYM'           ! asymmetric gradient -> ASYM; symmetric gradient -> SYMM
       integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
       integer(i4b), parameter     :: WINDOW = 3		             ! WINDOW*2 + 1 is width of window
-      character(4), parameter     :: GRAD_TEST = 'FIT'
+      character(4), parameter     :: GRAD_TEST = 'NONE'
       character(4), parameter     :: FORCE_TEST = 'NONE'           ! random weight drawn from uniform dist -> RAND
-      logical, parameter          :: WRITE_OUTPUT = .TRUE.
+      logical, parameter          :: WRITE_OUTPUT = .FALSE.
 
 
-      real(r8b),parameter         :: L = 100.D0                 ! length of interval
+      real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
       real(r8b), parameter        :: STEPSIG=1.D0             ! sigma of individual step
@@ -55,7 +55,7 @@ PROGRAM soft_fbm
       character(4)                :: WALL = 'HARD'
 
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
-      integer(i4b), parameter     :: NBIN =  50                   ! number of bins for density distribution
+      integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
       integer(i4b), parameter     :: NTSTART=2**26-1000          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
 
@@ -79,7 +79,7 @@ PROGRAM soft_fbm
       real(r8b)              :: confxx(1:NT)                     ! average of xx after each time step  
       real(r8b)              :: conf2xx(1:NT)                    
       real(r8b)              :: sumxx(1:NT),sum2xx(1:NT)         ! sums over machines in MPI version
-      real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
+      !real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
 
       real(r8b)		   :: window_mu, bin_mu, bin_mu2
       real(r8b)		   :: window_covar
@@ -194,7 +194,7 @@ PROGRAM soft_fbm
       enddo xix_generating_loop
         
       if (myid .eq. 0) then 
-            write(*,'(A)') 'Completed generating xix for all walkers in set'
+            print *, 'set ', iset, ': completed generating FBM steps'
       end if 
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -345,18 +345,22 @@ PROGRAM soft_fbm
          sum2xx(:)=conf2xx(:)
          sumdis(:)=xxdis(:)
 
+         confxx(:) = 0.D0
+         conf2xx(:) = 0.D0
+         xxdis(:) = 0.D0
+
          !sum_global = global_corr
          !sum_local(:) = local_corr(:)
 
          do id=1,numprocs-1                                                   ! Receive data
-            call MPI_RECV(auxxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
-            call MPI_RECV(aux2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
-            sumxx(:)=sumxx(:)+auxxx(:) 
-            sum2xx(:)=sum2xx(:)+aux2xx(:) 
+            call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
+            call MPI_RECV(conf2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
+            sumxx(:)=sumxx(:)+confxx(:)
+            sum2xx(:)=sum2xx(:)+conf2xx(:)
 
             if(WRITEDISTRIB) then
-                  call MPI_RECV(auxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
-                  sumdis(:)=sumdis(:)+auxdis(:)
+                  call MPI_RECV(xxdis(:),2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
+                  sumdis(:)=sumdis(:)+xxdis(:)
             end if 
 
             !call MPI_RECV(aux_global,1,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)
@@ -388,13 +392,13 @@ PROGRAM soft_fbm
         write(2,*) 'L=', L
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
-        write(2,*) 'FORCE_TYPE', FORCE_TYPE
-        write(2,*) 'FORCE_TEST', FORCE_TEST
-        write(2,*) 'GRAD_FORM', GRAD_FORM
-        write(2,*) 'GRAD_DX', GRAD_DX
-        write(2,*) 'GRAD_TEST', GRAD_TEST
+        write(2,*) 'FORCE_TYPE: ', FORCE_TYPE
+        write(2,*) 'FORCE_TEST: ', FORCE_TEST
+        write(2,*) 'GRAD_FORM: ', GRAD_FORM
+        write(2,*) 'GRAD_DX: ', GRAD_DX
+        write(2,*) 'GRAD_TEST: ', GRAD_TEST
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
-	  write(2,*) 'WINDOW_WIDTH', 2*WINDOW + 1
+	  write(2,*) 'WINDOW_WIDTH: ', 2*WINDOW + 1
         write (2,*)'=================================='
         write(2,*) '   time         <r>         <r^2>'      
         it=1
