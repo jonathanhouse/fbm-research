@@ -331,7 +331,6 @@ PROGRAM soft_fbm
               call system_clock(tnow)
               write(*,'(A,I0,A,I0,A,F0.3,A)') 'finished all ', totsets,&
                 'sets (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
-            endif
       endif
 
 ! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
