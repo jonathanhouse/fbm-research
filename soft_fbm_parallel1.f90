@@ -11,7 +11,7 @@ PROGRAM soft_fbm
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #define PARALLEL
-#define VERSION 'Soft FBM Parallel v1'
+#define VERSION 'Soft FBM Parallel (procs as sets)'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -28,8 +28,8 @@ PROGRAM soft_fbm
      
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
       integer(i4b), parameter     :: NSETS = 2500
-      integer(i4b), parameter     :: WALKS_PER_SET = 10 
-      integer(i4b), parameter     :: NCONF=NSETS*WALKS_PER_SET                    ! number of walkers
+      integer(i4b), parameter     :: NWALKS_PER_SET = 10 
+      integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
 
@@ -96,7 +96,7 @@ PROGRAM soft_fbm
 
       real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
       real(r8b)              :: temp_history(-NBIN:NBIN)
-      real(r8b)              :: temp_xx(1:WALKS_PER_SET)
+      real(r8b)              :: temp_xx(1:NWALKS_PER_SET)
 
       real(r8b), allocatable   :: xxdis(:)                ! density histogram 
       real(r8b), allocatable   :: sumdis(:)
@@ -154,7 +154,7 @@ PROGRAM soft_fbm
       conf2xx(:)=0.D0
       conf_history(:) = 0.D0
       
-      allocate(walkers_xix(1:WALKS_PER_SET,1:2*NT)) ! allocate 2D array to store walker's FBM steps  
+      allocate(walkers_xix(1:NWALKS_PER_SET,1:NT)) ! allocate 2D array to store walker's FBM steps  
       walkers_xix(:,:) = 0.D0
 
       !global_corr = 0.D0
@@ -172,7 +172,7 @@ PROGRAM soft_fbm
             else
               tlast=tnow
               call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. conf. ', iset,' of ',totsets,&
+              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. set. ', iset,' of ',totsets,&
                 ' (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
             endif
       endif
@@ -183,13 +183,13 @@ PROGRAM soft_fbm
 #endif 
 
       !!!!!!!!! For every walker in a set, compute their FBM steps over full time !!!!!!!!!
-      xix_generating_loop: do iwalker=1,WALKS_PER_SET
-            iconf = iset*WALKS_PER_SET - (WALKS_PER_SET-1) + (iwalker-1) ! find unique iconf number for each walker 
+      xix_generating_loop: do iwalker=1,NWALKS_PER_SET
+            iconf = iset*NWALKS_PER_SET - (NWALKS_PER_SET-1) + (iwalker-1) ! find unique iconf number for each walker 
 
             call gkissinit(IRINIT+iconf-1) 
             call corvec(xix,2*NT,M+1,GAMMA)  ! create x-increments (correlated Gaussian random numbers)
             xix(:) = xix(:)*STEPSIG
-            walkers_xix(iwalker,:) = xix(:) ! store xix increments for each walker 
+            walkers_xix(iwalker,:) = xix(1:NT) ! store xix increments for each walker 
 
       enddo xix_generating_loop
         
@@ -209,7 +209,7 @@ PROGRAM soft_fbm
             time_loop: do it=1, NT
  
             temp_history(:) = 0.D0 ! after each time step, reset the temp history stored
-            walkers_in_set: do iwalker=1,WALKS_PER_SET
+            walkers_in_set: do iwalker=1,NWALKS_PER_SET
 
                   ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! calculate starting bin for iwalker 
                   grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
@@ -301,7 +301,7 @@ PROGRAM soft_fbm
                   ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! new walker bin s
 
                   ! update full history distribution for gradient calculation
-                  temp_history(ibin)=temp_history(ibin)+1.0D0 
+                  temp_history(ibin)=temp_history(ibin)+1.0D0/NWALKS_PER_SET
 
                   if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
                         ! record steady-state distribution 
@@ -314,7 +314,7 @@ PROGRAM soft_fbm
 
             conf_history(:) = conf_history(:) + temp_history(:) ! after all steps have been taken, update new history distribution
 
-            do iwalker=1,WALKS_PER_SET
+            do iwalker=1,NWALKS_PER_SET
                   confxx(it)=confxx(it) + temp_xx(iwalker)
                   conf2xx(it)=conf2xx(it) + temp_xx(iwalker)*temp_xx(iwalker)
             end do 

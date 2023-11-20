@@ -7,38 +7,38 @@ import tikzplotlib as tz
 
 
 fig,ax = plt.subplots(1,1)
-y = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm pos & force pos/symmetric gradient/nbin=50M")
-x = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm pos & force pos/asymmetric gradient/nbin=50M")
+y = DataFile("data/parallel walkers/procs as walkers/linear force/gamma=1.0/weight=-0.25/nt=2**10/L=10M (nbin=5M)/nconf=10*32/asymmetric gradient")
+x = DataFile("data/parallel walkers/procs as walkers/linear force/gamma=1.0/weight=-0.25/nt=2**10/L=10M (nbin=5M)/nconf=10*64/asymmetric gradient",'avx')
+z = DataFile("data/parallel walkers/procs as walkers/linear force/gamma=1.0/weight=-0.25/nt=2**18/L=10M (nbin=5M)/nconf=10*64/asymmetric gradient",'avx')
+z1 = DataFile("data/parallel walkers/procs as walkers/linear force/gamma=1.0/weight=-0.25/nt=2**21/L=10M (nbin=5M)/nconf=10*64/asymmetric gradient",'avx')
+z2 = DataFile("data/parallel walkers/procs as walkers/linear force/gamma=1.0/weight=-0.25/nt=2**21/L=10M (nbin=5M)/nconf=10*128/asymmetric gradient",'avx')
 
-x1 = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm & force steps/asymmetric gradient/nbin=5M")
-y1 = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/correlations/fbm & force steps/symmetric gradient/nbin=5M")
-
-g1_w5_steps = DataFile("data/linear force/gamma=1.0/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad steps /asymmetric gradient")
-g6_w5_steps = DataFile("data/linear force/gamma=0.6/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad steps/asymmetric gradient")
-g6_w5_pos = DataFile("data/linear force/gamma=0.6/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad pos/asymmetric gradient")
-g1_w5_pos = DataFile("data/linear force/gamma=1.0/weight=-0.5/nt=2**26/L=10M/nbin=5M/correlations/fbm & grad pos/asymmetric gradient")
-
-ax.set(xlabel='t')
+x1 = DataFile("data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=1.5M/intv=[2**26]",'avx')
 
 ax.set(xscale='log',yscale='log')
+ax.set(xlabel='x/L')
 
-fig.suptitle('nbin/LBY2=1, weight=-0.5, nconf=25K, $\gamma=1.0$, asymmetric gradient')
+
+fig.suptitle('nbin/L=5M/10M, weight=-0.25, $\gamma=1.0$, asymmetric gradient')
 #ax.plot(x.cor['t'],(x.cor['<r^2>']))
 
-pos = g6_w5_pos.cor
+pos = y.avx
+pos1 = x.avx
+pos2 = z.avx
+pos3 = x1.avx
+pos4 = z1.avx
+pos5 = z2.avx
 
-ax.plot(pos['t'],pos['<r^2>'],label='<r^2>')
-ax.plot(pos['t'],pos['<xix_pos^2>'],label='<xix_pos^2>')
-ax.plot(pos['t'],pos['<f_grad_pos^2>'],label='<f_grad_pos^2>')
-ax.plot(pos['t'],(pos['<xix_pos*f_grad_pos>']),label='<xix_pos*f_grad_pos>')
+ax.plot(pos['t'],pos['<r^2>'],label='nconf=10*32')
+ax.plot(pos1['t'],pos1['<r^2>'],label='nconf=10*64')
+ax.plot(pos2['t'],pos2['<r^2>'],label='nconf=10*64')
+ax.plot(pos4['t'],pos4['<r^2>'],label='nconf=10*64')
+ax.plot(pos5['t'],pos5['<r^2>'],label='nconf=10*128')
+ax.plot(pos3['t'],pos3['<r^2>'],label='nconf=10*64,non-parallel')
 
-ax.plot(pos['t'],pos['<|xix_pos|>'],label='<|xix_pos|>')
-ax.plot(pos['t'],pos['<|grad_pos|>'],label='<|grad_pos|>')
+#log_fit(ax,pos['t'],pos['<r^2>'],interval=[461,922])
 
-141
-y = np.linspace(10**-2,10**11,1000)
-x = 141*np.ones(np.size(y))
-ax.plot(x,y,label='t=141')
+
 ax.legend()
 #log_fit(ax,g1_w5_steps.cor['t'],g1_w5_steps.cor['<|grad_pos|>'],interval=[8980384,60412582])
 '''
