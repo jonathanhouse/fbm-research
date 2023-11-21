@@ -134,6 +134,7 @@ PROGRAM soft_fbm
       call MPI_COMM_RANK( MPI_COMM_WORLD, myid, ierr )
       call MPI_COMM_SIZE( MPI_COMM_WORLD, numprocs, ierr )
       totsets=(NSETS/numprocs)*numprocs ! sets are 
+      totconf=totsets*NWALKS_PER_SET
       
       if (myid==0) then
          print *,'Program ',VERSION,' running on', numprocs, ' processes'
@@ -291,11 +292,16 @@ PROGRAM soft_fbm
                         
                         if (WRITE_OUTPUT) then
                         if (myid==0) then
-                              if (iconf==1) then 
+                              if (iset==1) then 
       
-                        write(*,'(I0.1, A, F0.7,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ', xx(it), ' = ',&
-                        xx(it-1), ' + ',xix(it), ' + ', force_step, " [", int(conf_history(ibin-1)), ",", int(conf_history(ibin)), &
-                        ",", int(conf_history(ibin+1)), "]"
+                        write(*,'(I0.1, A,I0,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)') &
+                         it, ' & ', &
+                         iwalker, ' : ',&
+                        temp_xx(iwalker), ' <- ',&
+                        xix(it), ' + ', force_step, &
+                        " [", int(NWALKS_PER_SET*conf_history(ibin-1)), ",",&
+                         int(NWALKS_PER_SET*conf_history(ibin)), &
+                        ",", int(NWALKS_PER_SET*conf_history(ibin+1)), "]"
       
                               endif
                         endif
