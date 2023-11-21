@@ -95,7 +95,6 @@ PROGRAM soft_fbm
       integer(i4b)           :: totconf,totsets                         ! actual number of confs
 
       real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
-      real(r8b)              :: temp_history(-NBIN:NBIN)
       real(r8b)              :: temp_xx(1:NWALKS_PER_SET)
 
       real(r8b), allocatable   :: xxdis(:)                ! density histogram 
@@ -133,7 +132,7 @@ PROGRAM soft_fbm
       call MPI_INIT(ierr)
       call MPI_COMM_RANK( MPI_COMM_WORLD, myid, ierr )
       call MPI_COMM_SIZE( MPI_COMM_WORLD, numprocs, ierr )
-      totsets=(NSETS/numprocs)*numprocs ! sets are 
+      totsets=(NSETS/numprocs)*numprocs ! NSETS is integer multiple of numprocs 
       totconf=totsets*NWALKS_PER_SET
       
       if (myid==0) then
@@ -149,20 +148,17 @@ PROGRAM soft_fbm
       if(WRITEDISTRIB) then 
             allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN))
             xxdis(:) = 0.D0
+            sumdis(:) = 0.D0
       endif 
 
       confxx(:)=0.D0 
       conf2xx(:)=0.D0
       conf_history(:) = 0.D0
       
-      allocate(walkers_xix(1:NWALKS_PER_SET,1:NT)) ! allocate 2D array to store walker's FBM steps  
-      walkers_xix(:,:) = 0.D0
+      allocate(walkers_xix(1:NWALKS_PER_SET,1:NT)) ! allocate 2D array to store each walker's FBM steps  
+      !walkers_xix(:,:) = 0.D0
 
-      !global_corr = 0.D0
-      !local_corr(:) = 0.D0
-
-! Loop over disorder configurations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+!!! EACH PROC LOOPS OVER THEIR SETS !!! 
 #ifdef PARALLEL
       disorder_loop: do iset=myid+1,totsets,numprocs
 !      if (myid==0) print *, 'dis. conf.', iconf
@@ -183,10 +179,10 @@ PROGRAM soft_fbm
 !         print *, 'dis. conf.', iconf
 #endif 
 
-      !!!!!!!!! For every walker in a set, compute their FBM steps over full time !!!!!!!!!
+      !!! GENERATING FBM STEPS FOR EACH WALKER !!! 
       xix_generating_loop: do iwalker=1,NWALKS_PER_SET
-            iconf = iset*NWALKS_PER_SET - (NWALKS_PER_SET-1) + (iwalker-1) ! find unique iconf number for each walker 
 
+            iconf = iset*NWALKS_PER_SET - (NWALKS_PER_SET-1) + (iwalker-1) ! find unique iconf number for each walker 
             call gkissinit(IRINIT+iconf-1) 
             call corvec(xix,2*NT,M+1,GAMMA)  ! create x-increments (correlated Gaussian random numbers)
             xix(:) = xix(:)*STEPSIG
@@ -200,31 +196,25 @@ PROGRAM soft_fbm
             write(*,'(A,I0,A,I0,A,F0.3,A)') 'set ', iset, ': finished generating fbm steps (took ',&
             (tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
       end if 
-! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-            !xx(0)=X0
-            conf_history(:) = 0.D0 ! Before each set, clear the conf_history 
-            conf_history(0) = 0.0D0 ! Initialize starting distribution 
-            temp_xx(:) = 0.D0 ! Initialize starting positions for all walkers 
-            !xix_sum = 0.D0
-            !grad_sum = 0.D0
+            !!! FOR EACH NEW SET, WE MUST: 
+            conf_history(:) = 0.D0 ! 1. Clear the conf_history 
+            conf_history(0) = 0.0D0 ! 2. Initialize starting distribution 
+            temp_xx(:) = 0.D0 ! 3. Initialize starting positions for all walkers 
 
-            
+            !!! TIME LOOP !!! 
             time_loop: do it=1, NT
  
-                  temp_history(:) = 0.D0 ! after each time step, reset the temp history stored
+                  !!! OVER EVERY WALKER IN THE SET !!! 
                   walkers_in_set: do iwalker=1,NWALKS_PER_SET
 
                         ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! calculate starting bin for iwalker 
-                        grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
-                        window_mu = 0.D0
-                        bin_mu = 0.D0
-                        bin_mu2 = 0.D0
-                        window_covar = 0.D0
+
+                        grad = 0.D0 ! reset grad in case we went over the wall in soft wall case
 
                         xix(it) = walkers_xix(iwalker,it) ! store current walkers FBM step here 
 
-                        !!!!!!!!!! Calculate the gradient for a time step !!!!!!!!!
+                        !! Calculate gradient for iwalker !! 
                         if( (GRAD_FORM .eq. 'ASYM') .and. (GRAD_TEST .eq. 'NONE') ) then
 
                               if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
@@ -270,7 +260,7 @@ PROGRAM soft_fbm
                         end if 
 
 
-                        !!!!!!!!!! Calculate walker's gradient term step !!!!!!!!!!!
+                        !! Calculate step from gradient term !! 
                         if (FORCE_TYPE .eq. 'NONLIN') then
                               force_step = nonlin_factor*STEPSIG*tanh(force_weight*grad/nonlin_factor) 
 
@@ -278,12 +268,11 @@ PROGRAM soft_fbm
                               force_step = force_weight*grad 
                         endif 
 
+                        !! Find and store iwalker's new position 
                         temp_xx(iwalker) = temp_xx(iwalker) + xix(it) + force_step
-                        !local_corr(it) = force_step*xix(it) + local_corr(it)
 
                         if (WALL .eq. 'SOFT') then
                               !temp_xx(iwalker) = temp_xx(iwalker) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
-
                         else ! WALL .eq. 'HARD'
                               if ( abs(temp_xx(iwalker)).gt.LBY2 ) then ! stopping boundaries
                                     temp_xx(iwalker) = temp_xx(iwalker) - xix(it) - force_step  ! undo the step just taken 
@@ -291,29 +280,27 @@ PROGRAM soft_fbm
                         end if
                         
                         if (WRITE_OUTPUT) then
-                        if (myid==0) then
-                              if (iset==1) then 
-      
-                        write(*,'(I0.1, A,I0,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)') &
-                         it, ' & ', &
-                         iwalker, ' : ',&
-                        temp_xx(iwalker), ' <- ',&
-                        xix(it), ' + ', force_step, &
-                        " [", int(NWALKS_PER_SET*conf_history(ibin-1)), ",",&
-                         int(NWALKS_PER_SET*conf_history(ibin)), &
-                        ",", int(NWALKS_PER_SET*conf_history(ibin+1)), "]"
-      
+                              if (myid==0) then
+                                    if (iset==1) then 
+            
+                              write(*,'(I0.1, A,I0,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)') &
+                              it, ' & ', &
+                              iwalker, ' : ',&
+                              temp_xx(iwalker), ' <- ',&
+                              xix(it), ' + ', force_step, &
+                              " [", int(NWALKS_PER_SET*conf_history(ibin-1)), ",",&
+                              int(NWALKS_PER_SET*conf_history(ibin)), &
+                              ",", int(NWALKS_PER_SET*conf_history(ibin+1)), "]"
+            
+                                    endif
                               endif
-                        endif
                         end if 
 
+                        !! Store position data for averaging over !! 
                         confxx(it)=confxx(it) + temp_xx(iwalker)
                         conf2xx(it)=conf2xx(it) + temp_xx(iwalker)*temp_xx(iwalker)
 
-                        ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! new walker bin s
-
-                        ! update full history distribution for gradient calculation
-                        temp_history(ibin)=temp_history(ibin)+1.0D0/NWALKS_PER_SET
+                        ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! get iwalker's new bin 
 
                         if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
                               ! record steady-state distribution 
@@ -324,12 +311,13 @@ PROGRAM soft_fbm
 
                   end do walkers_in_set
 
-                  conf_history(:) = conf_history(:) + temp_history(:) ! after all steps have been taken, update new history distribution
+                  !! After we find new pos for every walker, update the shared history distribution !! 
+                  do iwalker=1,NWALKS_PER_SET
+                        ibin = nint(temp_xx(iwalker)*NBIN/LBY2)
+                        conf_history(ibin) = conf_history(ibin) + 1.D0/NWALKS_PER_SET
+                  end do 
 
             end do time_loop
-           
-           !global_corr = global_corr + xix_sum*grad_sum
-
 
       end do disorder_loop      ! of do inconf=1,NCONF
 
@@ -337,13 +325,13 @@ PROGRAM soft_fbm
               tlast=tnow
               call system_clock(tnow)
               write(*,'(A,I0,A,I0,A,F0.3,A)') 'finished all ', totsets,&
-                'sets (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
+                ' sets (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
       endif
 
-! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! AFTER PROC HANDLES ITS SETS, WE CAN COLLECT DATA FROM ALL MACHINES !!! 
 
 #ifdef PARALLEL
-     if (myid.ne.0) then                                                  ! Send data
+     if (myid.ne.0) then ! if not the parent, send data to the parent 
          call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
          call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
 
@@ -351,22 +339,19 @@ PROGRAM soft_fbm
             call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
          end if
 
-         !call MPI_SEND(global_corr,1,MPI_DOUBLE_PRECISION,0,4,MPI_COMM_WORLD,ierr)
-         !call MPI_SEND(local_corr,NT,MPI_DOUBLE_PRECISION,0,5,MPI_COMM_WORLD,ierr)
+      else ! if we are the parent: 
 
-      else
+         ! we can use our data as the starting sum data 
          sumxx(:)=confxx(:)
          sum2xx(:)=conf2xx(:)
          sumdis(:)=xxdis(:)
 
+         ! and our freed config lists can be use to collect data 
          confxx(:) = 0.D0
          conf2xx(:) = 0.D0
          xxdis(:) = 0.D0
 
-         !sum_global = global_corr
-         !sum_local(:) = local_corr(:)
-
-         do id=1,numprocs-1                                                   ! Receive data
+         do id=1,numprocs-1 ! receive data from all other procs, and add to the sum vectors 
             call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
             call MPI_RECV(conf2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
             sumxx(:)=sumxx(:)+confxx(:)
@@ -376,13 +361,8 @@ PROGRAM soft_fbm
                   call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
                   sumdis(:)=sumdis(:)+xxdis(:)
             end if 
-
-            !call MPI_RECV(aux_global,1,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)
-            !call MPI_RECV(aux_local,NT,MPI_DOUBLE_PRECISION,id,5,MPI_COMM_WORLD,status,ierr)
-            !sum_global = sum_global + aux_global
-            !sum_local(:) = sum_local(:) + aux_local(:)
-
          enddo
+
       endif        
 #else          
       sumxx(:)=confxx(:)
@@ -404,6 +384,8 @@ PROGRAM soft_fbm
         write(2,*) 'GAMMMA=', GAMMA 
         write(2,*) 'NT= ', NT
         write(2,*) 'L=', L
+        write(2,*) 'NWALKERS_PER_SET=', NWALKS_PER_SET
+        write(2,*) 'NSETS=', totsets
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
         write(2,*) 'FORCE_TYPE: ', FORCE_TYPE
