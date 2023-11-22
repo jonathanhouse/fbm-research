@@ -7,27 +7,34 @@ import tikzplotlib as tz
 
 
 fig,ax = plt.subplots(1,1)
-y = DataFile("data/parallel walkers/procs as sets/linear force/gamma=1.0/weight=-0.25/nt=2**10/L=10M (nbin=5M)/nconf=64*32/asymmetric gradient",'avx')
-x = DataFile("data/parallel walkers/procs as sets/linear force/gamma=1.0/weight=-0.25/nt=2**10/L=10M (nbin=5M)/nconf=64*512/asymmetric gradient",'avx')
+y = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=64*32/asymmetric gradient (+1:32)",'avx')
+##x = DataFile("data/parallel walkers/procs as sets/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=64*32/asymmetric gradient",'avx')
 
-x1 = DataFile("data/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=1.5M/intv=[2**26]",'avx')
+x1 = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/intv=[2**26]/asymmetric gradient",'avx')
 
+
+ax.set(xlabel='t',ylabel='<r^2>')
 ax.set(xscale='log',yscale='log')
-ax.set(xlabel='x/L')
 
 
-fig.suptitle('nbin/L=5M/10M, weight=-0.25, $\gamma=1.0$, asymmetric gradient')
+
 #ax.plot(x.cor['t'],(x.cor['<r^2>']))
 
 pos = y.avx
-pos1 = x.avx
+dis = y.dis
+#pos1 = x.avx
 pos3 = x1.avx
 
 
+fig.suptitle('nbin/L=5M/10M, weight=-0.25, $\gamma=0.6$, asymmetric gradient, nconf=2048, intv=[0,2**26]')
 ax.plot(pos['t'],pos['<r^2>'],label='nconf=64*32')
-#ax.plot(pos1['t'],pos1['<r^2>'],label='nconf=64*512')
+ax.plot(pos3['t'],pos3['<r^2>'],label='non-parallel')
+#ax.plot(pow(dis['ibin'],1),dis['P(x)'])
+#ax.ploax.plot(pos['t'],pos['<r^2>'])t(dis['ibin'],dis['P(x)'])
+#ax.plot(pos['t'],pos['<r^2>'],label='nconf=64*128')
+#ax.plot(pos1['t'],pos1['<r^2>'],label='nconf=64*64')
 
-ax.plot(pos3['t'],pos3['<r^2>'],label='nconf=10*64,non-parallel')
+#ax.plot(pos3['t'],pos3['<r^2>'],label='nconf=10*64,non-parallel')
 
 #log_fit(ax,pos['t'],pos['<r^2>'],interval=[461,922])
 

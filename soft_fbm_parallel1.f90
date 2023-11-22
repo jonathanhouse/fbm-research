@@ -169,7 +169,7 @@ PROGRAM soft_fbm
             else
               tlast=tnow
               call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. set. ', iset,' of ',totsets,&
+              write(*,'(A,I0,A,I0,A,I0,A,F0.3,A)') 'dis. set ', iset,' of ',totsets,&
                 ' (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
             endif
       endif
@@ -324,8 +324,9 @@ PROGRAM soft_fbm
       if (myid==0) then
               tlast=tnow
               call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,F0.3,A)') 'finished all ', totsets,&
-                ' sets (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
+              write(*,'(A,I0,A,I0,A,F0.3,A)') 'parent finished last of ', totsets,&
+                ' sets and starting data collection (took ',(tnow-tlast)/(60*tcount),'&
+                 minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
       endif
 
 !!! AFTER PROC HANDLES ITS SETS, WE CAN COLLECT DATA FROM ALL MACHINES !!! 
@@ -370,6 +371,14 @@ PROGRAM soft_fbm
       sumdis(:)=xxdis(:)
 #endif
          
+      if (myid==0) then
+            tlast=tnow
+            call system_clock(tnow)
+            write(*,'(A,I0,A,F0.3,A)') 'Finished data collection (took', &
+            (tnow-tlast)/(60*tcount),'&
+            minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
+      endif
+
 #ifdef PARALLEL
       if (myid==0) then
 #endif       
