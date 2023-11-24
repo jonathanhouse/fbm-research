@@ -11,7 +11,7 @@ PROGRAM soft_fbm
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #define PARALLEL
-#define VERSION 'soft_fbm'
+#define VERSION 'Soft FBM with Probabilistic Force'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -27,20 +27,13 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
       integer(i4b), parameter     :: NCONF=25000                    ! number of walkers
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
-      
 
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
-      real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
-      character(6), parameter     :: FORCE_TYPE = 'LINEAR'         ! Nonlinear tanh = 'NONLIN', Linear force = 'LINEAR'
-      character(4), parameter     :: GRAD_FORM = 'ASYM'           ! asymmetric gradient -> ASYM; symmetric gradient -> SYMM
-      integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
-      integer(i4b), parameter     :: WINDOW = 3		             ! WINDOW*2 + 1 is width of window
-      character(4), parameter     :: GRAD_TEST = 'FIT'
-      character(4), parameter     :: FORCE_TEST = 'NONE'           ! random weight drawn from uniform dist -> RAND
-      logical, parameter          :: WRITE_OUTPUT = .TRUE.
+      real(r8b)                   :: p_accept = 0.8D0
+      logical, parameter          :: WRITE_OUTPUT = .FALSE.
 
 
-      real(r8b),parameter         :: L = 100.D0                 ! length of interval
+      real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
       real(r8b), parameter        :: STEPSIG=1.D0             ! sigma of individual step
@@ -51,7 +44,7 @@ PROGRAM soft_fbm
       character(4)                :: WALL = 'HARD'
 
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
-      integer(i4b), parameter     :: NBIN =  50                   ! number of bins for density distribution
+      integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
       integer(i4b), parameter     :: NTSTART=2**26-1000          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
 
@@ -77,9 +70,6 @@ PROGRAM soft_fbm
       real(r8b)              :: sumxx(1:NT),sum2xx(1:NT)         ! sums over machines in MPI version
       real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
 
-      real(r8b)		   :: window_mu, bin_mu, bin_mu2
-      real(r8b)		   :: window_covar
-
       !real(r8b)              :: local_corr(1:NT)                  ! product of FBM step and gradient step at each time for a conf
       !real(r8b)              :: global_corr, xix_sum, grad_sum                      ! product of sum of FBM steps and sum of gradient steps for a conf
       !real(r8b)              :: sum_local(1:NT),aux_local(1:NT)
@@ -87,10 +77,10 @@ PROGRAM soft_fbm
 
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
-      integer(i4b)           :: iconf, it, ibin, w                       ! configuration, and time counters   
+      integer(i4b)           :: iconf, it, ibin_curr, ibin_new, w                       ! configuration, and time counters   
       integer(i4b)           :: totconf                         ! actual number of confs
 
-      real(r8b)              :: config_xxdis(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
+      real(r8b)              :: config_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
 
       real(r8b), allocatable   :: xxdis(:)                ! density histogram 
       real(r8b), allocatable   :: sumdis(:)
@@ -144,7 +134,7 @@ PROGRAM soft_fbm
 
       confxx(:)=0.D0 
       conf2xx(:)=0.D0
-      config_xxdis(:) = 0.D0
+      config_history(:) = 0.D0
       
       !global_corr = 0.D0
       !local_corr(:) = 0.D0
@@ -188,232 +178,67 @@ PROGRAM soft_fbm
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
             xx(0)=X0
-            config_xxdis(:) = 0.D0
-            config_xxdis(0) = 1.0D0
-            !xix_sum = 0.D0
-            !grad_sum = 0.D0
-            do it=1, NT
+            config_history(:) = 0.D0
+            config_history(0) = 1.0D0
+
+            time_loop: do it=1, NT
  
-                  ibin=nint( xx(it-1)*NBIN/LBY2 ) ! find walker's starting bin 
+                  ibin_curr =nint( xx(it-1)*NBIN/LBY2 ) ! find walker's starting bin 
                   grad = 0.D0 ! reset grad in case we went past the wall in soft wall case
-		      window_mu = 0.D0
-		      bin_mu = 0.D0
-		      bin_mu2 = 0.D0
-		      window_covar = 0.D0
 
-            if( (GRAD_FORM .eq. 'ASYM') .and. (GRAD_TEST .eq. 'NONE') ) then
-
-                  if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-                              
-                        if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
-                              grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-      
-                        else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                    
-                        else ! else, xix=0, so we flip a coin 
-                              grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-                              if (rkiss05() < 0.5D0) then
-                                     grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                              end if 
-                        end if 
-
-
-                  else ! we're in region where calculating gradient towards wall walks off distribution
-                        if (ibin .gt. 0) then ! we're at right wall
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
-                        else ! we're at left wall 
-                              grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
-                        end if 
-                  end if 
-
-            end if 
-
-
-            if(GRAD_FORM .eq. 'SYMM') then
-
-                  if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-                        grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*2.D0*LBY2/NBIN)
-                        
-                  else ! we're in region where calculating gradient towards wall walks off distribution
-                        if (ibin .gt. 0) then ! we're at right wall
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
-                        else ! we're at left wall 
-                              grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
-                        end if 
-                  end if 
-
-            end if 
-
-            if(GRAD_FORM .eq. 'MIX') then 
-
-                  if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-                        grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*2.D0*LBY2/NBIN)
-                        if ( (config_xxdis(ibin+GRAD_DX) .eq. config_xxdis(ibin-GRAD_DX)) .and.&
-                         (config_xxdis(ibin) .gt. config_xxdis(ibin+GRAD_DX)) ) then
-
-                              if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
-                                    grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-            
-                              else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
-                                    grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                          
-                              else ! else, xix=0, so we flip a coin 
-                                    grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-                                    if (rkiss05() < 0.5D0) then
-                                           grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                    end if 
-                              end if 
-                        end if 
-      
-                        
-                  else ! we're in region where calculating gradient towards wall walks off distribution
-                        if (ibin .gt. 0) then ! we're at right wall
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
-                        else ! we're at left wall 
-                              grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
-                        end if 
-                  end if 
-
-            end if 
-
-
-            if( (GRAD_TEST .eq. 'FILL') .and. (GRAD_FORM .eq. 'ASYM')) then 
-                  if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-                              
-                        ! if our walker is in a well 
-                        if( (config_xxdis(ibin-1).gt.config_xxdis(ibin)) .and. & 
-                          ( config_xxdis(ibin+1).gt.config_xxdis(ibin)) ) then
-                              grad = -xix(it)/force_weight ! maybe we expect it to stay here
-
-                        else ! else, normal asymmetric gradient formula 
-                              if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
-                                    grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-            
-                              else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
-                                    grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                          
-                              else ! else, xix=0, so we flip a coin 
-                                    grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-                                    if (rkiss05() < 0.5D0) then
-                                          grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                    end if 
-                              end if 
-                        end if 
-
-                  else ! we're in region where calculating gradient towards wall walks off distribution
-                        if (ibin .gt. 0) then ! we're at right wall
-                              grad = ( config_xxdis(ibin) - config_xxdis(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
-                        else ! we're at left wall 
-                              grad = ( config_xxdis(ibin+GRAD_DX) - config_xxdis(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
-                        end if 
-                  end if 
-
-            end if 
-
-
-            !!! Calculate gradient using linear regression (symmetric gradient calculation)!!! 
-            if( (GRAD_TEST .eq. 'FIT') .and. (GRAD_FORM .eq. 'SYMM')) then 
-
-                  if( abs(ibin).le.(NBIN-WINDOW) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-			!grad = ( config_xxdis(ibin+1) - config_xxdis(ibin-1) ) / (2.D0*LBY2/NBIN)
-			window_loop: do w=ibin-WINDOW,ibin+WINDOW
-				window_mu = window_mu + config_xxdis(w)
-				window_covar = window_covar + w*(LBY2/NBIN)*config_xxdis(w)
-				bin_mu = bin_mu + w*LBY2/NBIN
-				bin_mu2 = bin_mu2 + (w*LBY2/NBIN)**2
-			end do window_loop 
-			window_mu = window_mu/(2*WINDOW+1)
-			window_covar = window_covar/(2*WINDOW+1)
-			bin_mu = bin_mu / (2*WINDOW+1)
-			bin_mu2 = bin_mu2 / (2*WINDOW+1)
-
-			grad = (window_covar - ibin*(LBY2/NBIN)*window_mu)/( bin_mu2 - bin_mu**2 )
-                  end if 
-
-		      if( abs(ibin).gt.(NBIN-WINDOW) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
-
-			window_loop_2: do w=ibin-sign(1,ibin)*WINDOW,sign(1,ibin)*NBIN, sign(1,ibin)
-				window_mu = window_mu + config_xxdis(w)
-				window_covar = window_covar + w*LBY2/NBIN*config_xxdis(w)
-				bin_mu = bin_mu + w*(LBY2/NBIN)
-				bin_mu2 = bin_mu2 + (w*(LBY2/NBIN))**2
-			end do window_loop_2 
-
-			window_mu = window_mu/(NBIN-(abs(ibin) - WINDOW) + 1)
-			window_covar = window_covar/(NBIN-(abs(ibin) - WINDOW) + 1)
-			bin_mu = bin_mu / (NBIN-(abs(ibin) - WINDOW) + 1)
-			bin_mu2 = bin_mu2 / (NBIN-(abs(ibin) - WINDOW) + 1)
-
-			grad = (window_covar - bin_mu*window_mu)/( bin_mu2 - bin_mu**2 )
-                  end if 
-            end if 
-
-            if (FORCE_TEST .eq. 'RAND') then 
-                  call random_number(force_weight)
-                  force_weight = force_weight*(-1)
-            end if 
-
-                 
-
-                  ! calculate walker's new position 
-                  if (FORCE_TYPE .eq. 'NONLIN') then
-                        force_step = nonlin_factor*STEPSIG*tanh(force_weight*grad/nonlin_factor) 
-
-                  else ! FORCE_TYPE = 'linear'
-                        force_step = force_weight*grad 
-                  endif 
-
-                  xx(it) = xx(it-1) + xix(it) + force_step
-                  !local_corr(it) = force_step*xix(it) + local_corr(it)
+                  xx(it) = xx(it-1) + xix(it) ! find new position of walker 
 
                   if (WALL .eq. 'SOFT') then
                         xx(it) = xx(it) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
-
                   else ! WALL .eq. 'HARD'
                         if ( abs(xx(it)).gt.LBY2 ) then ! stopping boundaries
                               xx(it)=xx(it-1)
                         endif 
                   end if
 
+                  ibin_new = nint( xx(it)*NBIN/LBY2 )
+
+                  ! if we're trying to walk into a higher density bin, go to p_accept 
+                  if(config_history(ibin_new) .gt. config_history(ibin_curr)) then 
+                        if (rkiss05() < p_accept) then 
+                              continue 
+                        else 
+                              p_accept = p_accept*p_accept ! p_accept becomes a factor smaller 
+                              xx(it) = xx(it) - xix(it) ! if step isn't accepted, don't move anywhere 
+                              ibin_new = nint( xx(it)*NBIN/LBY2 ) ! and recalculate new bin
+                        end if 
+                  end if 
+                       
                   confxx(it)=confxx(it) + xx(it)
                   conf2xx(it)=conf2xx(it) + xx(it)*xx(it)
                   !xix_sum = xix_sum + xix(it)
                   
                   if (WRITE_OUTPUT) then
-                  if (myid==0) then
-                        if (iconf==1) then 
- 
-                  write(*,'(I0.1, A, F0.7,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')  it, ' : ', xx(it), ' = ',&
-                   xx(it-1), ' + ',xix(it), ' + ', force_step, " [", int(config_xxdis(ibin-1)), ",", int(config_xxdis(ibin)), &
-                   ",", int(config_xxdis(ibin+1)), "]"
- 
+                        if (myid==0) then
+                              if (iconf==1) then 
+                              write(*,'(I0.1, A, F0.7,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)')&
+                              it, ' : ',&
+                              xx(it), ' = ',&
+                              xx(it-1), ' + ',xix(it), ' + ', force_step,&
+                              " [", int(config_history(ibin_new-1)),&
+                              ",", int(config_history(ibin_new)), &
+                              ",", int(config_history(ibin_new+1)), "]"
+                              endif
                         endif
-                   endif
                   end if 
 
-                  ibin=nint( xx(it)*NBIN/LBY2 ) ! new walker bin s
-
                   ! update full time distribution for gradient 
-                  config_xxdis(ibin)=config_xxdis(ibin)+1.0D0 
+                  config_history(ibin_new) = config_history(ibin_new) + 1.0D0 
 
-                  if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
-
-
+                  if ( (ibin_new.ge.-NBIN) .and. (ibin_new.le.NBIN)) then
                         ! record steady-state distribution 
                         if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
-                              xxdis(ibin) = xxdis(ibin) + 1.0D0
+                              xxdis(ibin_new) = xxdis(ibin_new) + 1.0D0
                         end if 
-
                   end if
             
-
-
-           end do  
+           end do time_loop
            
-           !global_corr = global_corr + xix_sum*grad_sum
-
-
       end do disorder_loop      ! of do inconf=1,NCONF
 
 ! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -478,13 +303,7 @@ PROGRAM soft_fbm
         write(2,*) 'L=', L
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
-        write(2,*) 'FORCE_TYPE', FORCE_TYPE
-        write(2,*) 'FORCE_TEST', FORCE_TEST
-        write(2,*) 'GRAD_FORM', GRAD_FORM
-        write(2,*) 'GRAD_DX', GRAD_DX
-        write(2,*) 'GRAD_TEST', GRAD_TEST
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
-	  write(2,*) 'WINDOW_WIDTH', 2*WINDOW + 1
         write (2,*)'=================================='
         write(2,*) '   time         <r>         <r^2>'      
         it=1
@@ -511,11 +330,11 @@ PROGRAM soft_fbm
         write(2,*) 'NCONF=',totconf
         write (2,*)'=================================='
         write(2,*) '   ibin    x=(L/2*ibin)/NBIN  x/L   P(x)  P(x)*L  P(|x|)   L/2-x '
-        do ibin=-NBIN,NBIN 
-          x= (L/2*ibin)/NBIN
-          PP= (sumdis(ibin)*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
-          PPsym= ( (0.5D0*sumdis(ibin)+0.5D0*sumdis(-ibin))*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
-          Write(2,'(1X,I9,8(2X,E13.6))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
+        do ibin_curr=-NBIN,NBIN 
+          x= (L/2*ibin_curr)/NBIN
+          PP= (sumdis(ibin_curr)*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
+          PPsym= ( (0.5D0*sumdis(ibin_curr)+0.5D0*sumdis(-ibin_curr))*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
+          Write(2,'(1X,I9,8(2X,E13.6))') ibin_curr, x, x/L, PP, PP*L, PPsym, L/2-x 
         enddo 
         close(2) 
       endif
