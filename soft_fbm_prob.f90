@@ -29,7 +29,7 @@ PROGRAM soft_fbm
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
 
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
-      real(r8b)                   :: p_accept = 0.8D0
+      real(r8b), parameter        :: p_accept = 0.8D0
       logical, parameter          :: WRITE_OUTPUT = .FALSE.
 
 
@@ -75,6 +75,7 @@ PROGRAM soft_fbm
       !real(r8b)              :: sum_local(1:NT),aux_local(1:NT)
       !real(r8b)              :: sum_global, aux_global
 
+      real(r8b)              :: p_accept_conf
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
       integer(i4b)           :: iconf, it, ibin_curr, ibin_new, w                       ! configuration, and time counters   
@@ -180,6 +181,7 @@ PROGRAM soft_fbm
             xx(0)=X0
             config_history(:) = 0.D0
             config_history(0) = 1.0D0
+            p_accept_conf = p_accept
 
             time_loop: do it=1, NT
  
@@ -200,10 +202,10 @@ PROGRAM soft_fbm
 
                   ! if we're trying to walk into a higher density bin, go to p_accept 
                   if(config_history(ibin_new) .gt. config_history(ibin_curr)) then 
-                        if (rkiss05() < p_accept) then 
+                        if (rkiss05() < p_accept_conf) then 
                               continue 
                         else 
-                              p_accept = p_accept*p_accept ! p_accept becomes a factor smaller 
+                              p_accept_conf = p_accept_conf*p_accept ! p_accept becomes a factor smaller 
                               xx(it) = xx(it) - xix(it) ! if step isn't accepted, don't move anywhere 
                               ibin_new = nint( xx(it)*NBIN/LBY2 ) ! and recalculate new bin
                         end if 
