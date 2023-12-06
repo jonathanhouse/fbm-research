@@ -7,36 +7,53 @@ import tikzplotlib as tz
 
 
 fig,ax = plt.subplots(1,1)
-y = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=64*32/asymmetric gradient (+1:32)",'avx')
-##x = DataFile("data/parallel walkers/procs as sets/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=64*32/asymmetric gradient",'avx')
 
-x1 = DataFile("data/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M/intv=[2**26]/asymmetric gradient",'avx')
+def suptitle_gen(x):
+    title = "nbin/L=" + "5M" + "/" + "10M"+ ', weight=' + str(x.weight)\
+    + ", gamma=" + str(x.gamma) + ", nconf=" + str(x.weight) + ", t=[0,2**26]" 
 
+    fig.suptitle(title)
+
+run25 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+run26 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.99/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+run94 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.9999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+#run1 = DataFile("data/linear force/gamma=1.0/weight=0.0/nt=2**26/L=1.5M/nbin=750K")
 
 ax.set(xlabel='t',ylabel='<r^2>')
+x_i = 't'
+y_i = '<r^2>'
+
 ax.set(xscale='log',yscale='log')
 
 
 
-#ax.plot(x.cor['t'],(x.cor['<r^2>']))
+#ax.plot(x.cor['t'],(x.cor['<r^2>']))##
 
-pos = y.avx
-dis = y.dis
-#pos1 = x.avx
-pos3 = x1.avx
+dis25 = run25.avx
+dis26 = run26.avx
+data94 = run94.avx
+#data1 = run1.dis
 
+#ax.plot(pos[x_i],pos[y_i],label='nconf=64*32')
+#ax.plot(pos1[x_i],pos1[y_i],label='p_accept=0.8')
+#ax.plot(pos2[x_i],pos2[y_i],label='p_accept=0.95')
+#ax.plot(pos3[x_i],pos3[y_i],label='non-probabilistic')
+#ax.plot(pos4[x_i],pos4[y_i],label='BM')
 
-fig.suptitle('nbin/L=5M/10M, weight=-0.25, $\gamma=0.6$, asymmetric gradient, nconf=2048, intv=[0,2**26]')
-ax.plot(pos['t'],pos['<r^2>'],label='nconf=64*32')
-ax.plot(pos3['t'],pos3['<r^2>'],label='non-parallel')
-#ax.plot(pow(dis['ibin'],1),dis['P(x)'])
+ax.plot(dis25[x_i],dis25[y_i], label='p_accept=0.8')
+ax.plot(dis26[x_i],dis26[y_i], label='p_accept=0.99')
+ax.plot(data94[x_i],data94[y_i], label='p_accept=0.9999')
+#ax.plot(data1[x_i],data1[y_i], label='BM')
+
+suptitle_gen(run25)
+
 #ax.ploax.plot(pos['t'],pos['<r^2>'])t(dis['ibin'],dis['P(x)'])
 #ax.plot(pos['t'],pos['<r^2>'],label='nconf=64*128')
 #ax.plot(pos1['t'],pos1['<r^2>'],label='nconf=64*64')
 
 #ax.plot(pos3['t'],pos3['<r^2>'],label='nconf=10*64,non-parallel')
 
-#log_fit(ax,pos['t'],pos['<r^2>'],interval=[461,922])
+log_fit(ax,dis25['t'],dis25['<r^2>'],interval=[35921537,60412582])
 
 
 ax.legend()
@@ -112,7 +129,7 @@ ax.plot(bm_data.avx["t"], bm_data.avx["<r^2>"],label='pure FBM : ' + str(bm_data
 ax.set(xlabel='t',ylabel='<r^2>')
 '''
 
-ax.legend()
+
 '''
 interval=[0.106280E+01, 0.121193E+01]
 bound_arr = x10.log['x']

@@ -281,7 +281,7 @@ PROGRAM soft_fbm
                         
                         if (WRITE_OUTPUT) then
                               if (myid==0) then
-                                    if (iset==1) then 
+                                    if (iset==1 .and. iwalker==1) then 
             
                               write(*,'(I0.1, A,I0,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)') &
                               it, ' & ', &
