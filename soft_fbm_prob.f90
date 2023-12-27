@@ -68,7 +68,7 @@ PROGRAM soft_fbm
       real(r8b)              :: confxx(1:NT)                     ! average of xx after each time step  
       real(r8b)              :: conf2xx(1:NT)                    
       real(r8b)              :: sumxx(1:NT),sum2xx(1:NT)         ! sums over machines in MPI version
-      real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
+      !real(r8b)              :: auxxx(1:NT),aux2xx(1:NT) 
 
       !real(r8b)              :: local_corr(1:NT)                  ! product of FBM step and gradient step at each time for a conf
       !real(r8b)              :: global_corr, xix_sum, grad_sum                      ! product of sum of FBM steps and sum of gradient steps for a conf
@@ -85,7 +85,7 @@ PROGRAM soft_fbm
 
       real(r8b), allocatable   :: xxdis(:)                ! density histogram 
       real(r8b), allocatable   :: sumdis(:)
-      real(r8b), allocatable   :: auxdis(:) 
+      !real(r8b), allocatable   :: auxdis(:) 
       real(r8b)                :: PP,PPsym,x                          ! P(x) 
                         
       external               :: kissinit 
@@ -129,14 +129,16 @@ PROGRAM soft_fbm
 #endif 
 
       if(WRITEDISTRIB) then 
-            allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN),auxdis(-NBIN:NBIN))
+            allocate(xxdis(-NBIN:NBIN),sumdis(-NBIN:NBIN))
             xxdis(:) = 0.D0
       endif 
 
       confxx(:)=0.D0 
       conf2xx(:)=0.D0
       config_history(:) = 0.D0
-      
+      sum2xx(:) = 0.D0
+      sumxx(:) = 0.D0
+
       !global_corr = 0.D0
       !local_corr(:) = 0.D0
 
@@ -177,7 +179,8 @@ PROGRAM soft_fbm
         xix(:)=xix(:)*STEPSIG                               ! scale increments to correct sigma 
         
 ! Time loop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+            confxx(:)=0.D0 
+            conf2xx(:)=0.D0
             xx(0)=X0
             config_history(:) = 0.D0
             config_history(0) = 1.0D0
@@ -240,15 +243,18 @@ PROGRAM soft_fbm
                   end if
             
            end do time_loop
-           
+
+           sum2xx(:) = p_accept*conf2xx(:) + sum2xx(:)
+           sumxx(:) = p_accept*confxx(:) + sumxx(:)
+
       end do disorder_loop      ! of do inconf=1,NCONF
 
 ! Now collect and analyze data !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef PARALLEL
      if (myid.ne.0) then                                                  ! Send data
-         call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
-         call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
+         call MPI_SEND(sumxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
+         call MPI_SEND(sum2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
 
          if(WRITEDISTRIB) then
             call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
@@ -258,22 +264,24 @@ PROGRAM soft_fbm
          !call MPI_SEND(local_corr,NT,MPI_DOUBLE_PRECISION,0,5,MPI_COMM_WORLD,ierr)
 
       else
-         sumxx(:)=confxx(:)
-         sum2xx(:)=conf2xx(:)
+         !sumxx(:)=confxx(:)
+         !sum2xx(:)=conf2xx(:)
          sumdis(:)=xxdis(:)
-
+         xxdis(:)= 0.D0
+         conf2xx(:) = 0.D0
+         confxx(:) = 0.D0
          !sum_global = global_corr
          !sum_local(:) = local_corr(:)
 
          do id=1,numprocs-1                                                   ! Receive data
-            call MPI_RECV(auxxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
-            call MPI_RECV(aux2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
-            sumxx(:)=sumxx(:)+auxxx(:) 
-            sum2xx(:)=sum2xx(:)+aux2xx(:) 
+            call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
+            call MPI_RECV(conf2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
+            sumxx(:)=sumxx(:)+confxx(:) 
+            sum2xx(:)=sum2xx(:)+conf2xx(:) 
 
             if(WRITEDISTRIB) then
-                  call MPI_RECV(auxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
-                  sumdis(:)=sumdis(:)+auxdis(:)
+                  call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
+                  sumdis(:)=sumdis(:)+xxdis(:)
             end if 
 
             !call MPI_RECV(aux_global,1,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)

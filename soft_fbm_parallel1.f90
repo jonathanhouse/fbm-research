@@ -93,6 +93,7 @@ PROGRAM soft_fbm
       real(r8b)              :: force_step
       integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i                       ! configuration, and time counters   
       integer(i4b)           :: totconf,totsets                         ! actual number of confs
+      real(r8b)              :: old_xx
 
       real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
       real(r8b)              :: temp_xx(1:NWALKS_PER_SET)
@@ -269,6 +270,7 @@ PROGRAM soft_fbm
                         endif 
 
                         !! Find and store iwalker's new position 
+                        old_xx = temp_xx(iwalker)
                         temp_xx(iwalker) = temp_xx(iwalker) + xix(it) + force_step
 
                         if (WALL .eq. 'SOFT') then
@@ -283,15 +285,11 @@ PROGRAM soft_fbm
                               if (myid==0) then
                                     if (iset==1 .and. iwalker==1) then 
             
-                              write(*,'(I0.1, A,I0,A,F0.10,A,F0.3,A,F0.3,A,I0.1,A,I0.1,A,I0.1,A)') &
-                              it, ' & ', &
-                              iwalker, ' : ',&
-                              temp_xx(iwalker), ' <- ',&
-                              xix(it), ' + ', force_step, &
-                              " [", int(NWALKS_PER_SET*conf_history(ibin-1)), ",",&
-                              int(NWALKS_PER_SET*conf_history(ibin)), &
-                              ",", int(NWALKS_PER_SET*conf_history(ibin+1)), "]"
-            
+                                    write(*,'(I0, A, F0.7,A,F0.10,A,F0.3,A,F0.3)')&
+                                    it, ' : ',&
+                                    temp_xx(iwalker), ' = ',&
+                                    old_xx, ' + ',xix(it), ' + ', force_step
+
                                     endif
                               endif
                         end if 
