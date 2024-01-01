@@ -15,6 +15,7 @@ def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
          #   d.dis["ibin"] = data[0].dis["ibin"]
 
         binned, bin_mid = ordered_binning(df=d,binsize=binsize)
+        return binned,bin_mid
         if type == 'linear':
             ax.set(xscale='linear',yscale='linear')
             ax.set(xlabel='$x$',ylabel='$P(x)$')
@@ -77,8 +78,8 @@ def msd_fit(ax, data, interval):
 
 def log_fit(ax,data_x,data_y,interval):
     bound_arr = data_x
-    low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-10)[0][0]
-    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-10)[0][0]
+    low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-7)[0][0]
+    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-7)[0][0]
 
     x_test = np.linspace(np.log10(interval[0]),np.log10(interval[1]),100)
     series = Poly.fit(np.log10(data_x[low_bound:high_bound]), np.log10(data_y[low_bound:high_bound]), deg=1, window=None)

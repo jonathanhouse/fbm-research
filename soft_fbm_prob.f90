@@ -17,6 +17,7 @@ PROGRAM soft_fbm
 ! data types
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       implicit none
+      integer,parameter      :: r10b = SELECTED_REAL_KIND(P=14,R=400)
       integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
       integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers 
       integer,parameter      :: i8b= SELECTED_INT_KIND(18)            ! 8-byte integers 
@@ -75,8 +76,9 @@ PROGRAM soft_fbm
       !real(r8b)              :: sum_local(1:NT),aux_local(1:NT)
       !real(r8b)              :: sum_global, aux_global
 
-      real(r8b)              :: p_accept_conf
+      real(r10b)              :: p_accept_conf
       real(r8b)              :: grad                             ! density gradient 
+      real(r8b)              :: conf_weight2, sum_weight2
       real(r8b)              :: force_step
       integer(i4b)           :: iconf, it, ibin_curr, ibin_new, w                       ! configuration, and time counters   
       integer(i4b)           :: totconf                         ! actual number of confs
@@ -138,6 +140,8 @@ PROGRAM soft_fbm
       config_history(:) = 0.D0
       sum2xx(:) = 0.D0
       sumxx(:) = 0.D0
+      sum_weight2 = 0.D0
+      conf_weight2 = 0.D0
 
       !global_corr = 0.D0
       !local_corr(:) = 0.D0
@@ -205,11 +209,9 @@ PROGRAM soft_fbm
 
                   ! if we're trying to walk into a higher density bin, go to p_accept 
                   if(config_history(ibin_new) .gt. config_history(ibin_curr)) then 
-                        if (rkiss05() < p_accept_conf) then 
-                              continue 
-                        else 
+                        if (rkiss05() > p_accept_conf) then ! if number outside of p_accept is selected
                               p_accept_conf = p_accept_conf*p_accept ! p_accept becomes a factor smaller 
-                              xx(it) = xx(it) - xix(it) ! if step isn't accepted, don't move anywhere 
+                              xx(it) = xx(it) - xix(it) ! step isn't accepted, don't move anywhere 
                               ibin_new = nint( xx(it)*NBIN/LBY2 ) ! and recalculate new bin
                         end if 
                   end if 
@@ -244,8 +246,10 @@ PROGRAM soft_fbm
             
            end do time_loop
 
-           sum2xx(:) = p_accept*conf2xx(:) + sum2xx(:)
-           sumxx(:) = p_accept*confxx(:) + sumxx(:)
+           sum2xx(:) = p_accept_conf*conf2xx(:) + sum2xx(:)
+           sumxx(:) = p_accept_conf*confxx(:) + sumxx(:)
+           write(*,'(A,E15.10)') 'log(p_accept)=', log(p_accept_conf)/log(p_accept)
+           conf_weight2 = p_accept_conf*p_accept_conf + conf_weight2
 
       end do disorder_loop      ! of do inconf=1,NCONF
 
@@ -260,6 +264,7 @@ PROGRAM soft_fbm
             call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
          end if
 
+         call MPI_SEND(conf_weight2,1,MPI_DOUBLE_PRECISION,0,4,MPI_COMM_WORLD,ierr)
          !call MPI_SEND(global_corr,1,MPI_DOUBLE_PRECISION,0,4,MPI_COMM_WORLD,ierr)
          !call MPI_SEND(local_corr,NT,MPI_DOUBLE_PRECISION,0,5,MPI_COMM_WORLD,ierr)
 
@@ -267,6 +272,8 @@ PROGRAM soft_fbm
          !sumxx(:)=confxx(:)
          !sum2xx(:)=conf2xx(:)
          sumdis(:)=xxdis(:)
+         sum_weight2=conf_weight2
+         conf_weight2 = 0.D0
          xxdis(:)= 0.D0
          conf2xx(:) = 0.D0
          confxx(:) = 0.D0
@@ -283,6 +290,8 @@ PROGRAM soft_fbm
                   call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
                   sumdis(:)=sumdis(:)+xxdis(:)
             end if 
+            call MPI_RECV(conf_weight2,1,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)
+            sum_weight2 = sum_weight2 + conf_weight2
 
             !call MPI_RECV(aux_global,1,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,status,ierr)
             !call MPI_RECV(aux_local,NT,MPI_DOUBLE_PRECISION,id,5,MPI_COMM_WORLD,status,ierr)
@@ -318,7 +327,7 @@ PROGRAM soft_fbm
         write(2,*) '   time         <r>         <r^2>'      
         it=1
         do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/totconf
+          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/(totconf*sum_weight2)
           it=max(it+1,nint(outtimefac*it))
         enddo 
         close(2) 
