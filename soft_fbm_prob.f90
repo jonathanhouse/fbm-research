@@ -17,7 +17,6 @@ PROGRAM soft_fbm
 ! data types
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       implicit none
-      integer,parameter      :: r10b = SELECTED_REAL_KIND(P=14,R=400)
       integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
       integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers 
       integer,parameter      :: i8b= SELECTED_INT_KIND(18)            ! 8-byte integers 
@@ -76,7 +75,7 @@ PROGRAM soft_fbm
       !real(r8b)              :: sum_local(1:NT),aux_local(1:NT)
       !real(r8b)              :: sum_global, aux_global
 
-      real(r10b)              :: p_accept_conf
+      real(r8b)              :: p_accept_conf
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: conf_weight2, sum_weight2
       real(r8b)              :: force_step
@@ -188,7 +187,7 @@ PROGRAM soft_fbm
             xx(0)=X0
             config_history(:) = 0.D0
             config_history(0) = 1.0D0
-            p_accept_conf = p_accept
+            p_accept_conf = log(p_accept)
 
             time_loop: do it=1, NT
  
@@ -209,8 +208,8 @@ PROGRAM soft_fbm
 
                   ! if we're trying to walk into a higher density bin, go to p_accept 
                   if(config_history(ibin_new) .gt. config_history(ibin_curr)) then 
-                        if (rkiss05() > p_accept_conf) then ! if number outside of p_accept is selected
-                              p_accept_conf = p_accept_conf*p_accept ! p_accept becomes a factor smaller 
+                        if (log(rkiss05()) > p_accept_conf) then ! if number outside of p_accept is selected
+                              p_accept_conf = p_accept_conf + log(p_accept) ! p_accept becomes a factor smaller 
                               xx(it) = xx(it) - xix(it) ! step isn't accepted, don't move anywhere 
                               ibin_new = nint( xx(it)*NBIN/LBY2 ) ! and recalculate new bin
                         end if 
@@ -246,10 +245,10 @@ PROGRAM soft_fbm
             
            end do time_loop
 
-           sum2xx(:) = p_accept_conf*conf2xx(:) + sum2xx(:)
-           sumxx(:) = p_accept_conf*confxx(:) + sumxx(:)
-           write(*,'(A,E15.10)') 'log(p_accept)=', log(p_accept_conf)/log(p_accept)
-           conf_weight2 = p_accept_conf*p_accept_conf + conf_weight2
+           sum2xx(:) = exp(p_accept_conf/(3.0e6))*conf2xx(:) + sum2xx(:)
+           sumxx(:) = exp(p_accept_conf/(3.0e6))*confxx(:) + sumxx(:)
+           !write(*,'(A,F0.7)') 'log(p_accept)=', p_accept_conf
+           conf_weight2 = exp(p_accept_conf/(3.0e6)) + conf_weight2
 
       end do disorder_loop      ! of do inconf=1,NCONF
 
@@ -322,6 +321,7 @@ PROGRAM soft_fbm
         write(2,*) 'L=', L
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
+        write(2,*) 'p_accept=', p_accept
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
         write (2,*)'=================================='
         write(2,*) '   time         <r>         <r^2>'      
