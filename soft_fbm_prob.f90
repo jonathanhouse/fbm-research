@@ -245,10 +245,10 @@ PROGRAM soft_fbm
             
            end do time_loop
 
-           sum2xx(:) = exp(p_accept_conf/(3.0e6))*conf2xx(:) + sum2xx(:)
-           sumxx(:) = exp(p_accept_conf/(3.0e6))*confxx(:) + sumxx(:)
+           sum2xx(:) = exp(p_accept_conf + (1.0e8))*conf2xx(:) + sum2xx(:)
+           sumxx(:) = exp(p_accept_conf + (1.0e8))*confxx(:) + sumxx(:)
            !write(*,'(A,F0.7)') 'log(p_accept)=', p_accept_conf
-           conf_weight2 = exp(p_accept_conf/(3.0e6)) + conf_weight2
+           conf_weight2 = exp(p_accept_conf + (1.0e8)) + conf_weight2
 
       end do disorder_loop      ! of do inconf=1,NCONF
 
@@ -327,7 +327,7 @@ PROGRAM soft_fbm
         write(2,*) '   time         <r>         <r^2>'      
         it=1
         do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/(totconf*sum_weight2)
+          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/sum_weight2
           it=max(it+1,nint(outtimefac*it))
         enddo 
         close(2) 
