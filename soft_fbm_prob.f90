@@ -34,8 +34,8 @@ PROGRAM soft_fbm
 
       real(r8b), parameter        :: MAX_LOG_ACCEPT = -3421674.29088
 
-      real(r8b),parameter         :: mapping_coeff = log(HUGE(p_accept)/10**50) - MAX_LOG_ACCEPT ! 3422384.07359
-      real(r8b),parameter         :: cutoff_accept = log(TINY(p_accept)) - mapping_coeff  ! −3423092.48134
+      real(r8b),parameter         :: mapping_factor = log(HUGE(p_accept)/10**50) - MAX_LOG_ACCEPT ! 3422384.07359
+      real(r8b),parameter         :: cutoff_accept = log(TINY(p_accept)) - mapping_factor  ! −3423092.48134
 
       real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
@@ -258,9 +258,9 @@ PROGRAM soft_fbm
            !write(*,'(A,F0.7)') 'log(p_accept)=', p_accept_conf
 
            if (p_accept_conf > cutoff_accept) then 
-                  sum2xx(:) = exp(p_accept_conf + mapping_coeff)*conf2xx(:) + sum2xx(:)
-                  sumxx(:) = exp(p_accept_conf + mapping_coeff)*confxx(:) + sumxx(:)           
-                  conf_weight2 = exp(p_accept_conf + mapping_coeff) + conf_weight2
+                  sum2xx(:) = exp(p_accept_conf + mapping_factor)*conf2xx(:) + sum2xx(:)
+                  sumxx(:) = exp(p_accept_conf + mapping_factor)*confxx(:) + sumxx(:)           
+                  conf_weight2 = exp(p_accept_conf + mapping_factor) + conf_weight2
            else 
                   ! do nothing, we don't add the data to the sum 
            end if 
