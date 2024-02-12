@@ -1,7 +1,7 @@
 from data_files import DataFile 
 import matplotlib.pyplot as plt 
 import numpy as np
-from plot import plot, msd_fit, plot_times, plot_binned, log_fit
+from plot import plot, msd_fit, plot_times, plot_binned, log_fit, gen_fit
 from numpy.polynomial.polynomial import Polynomial as Poly
 import tikzplotlib as tz 
 
@@ -9,43 +9,270 @@ import tikzplotlib as tz
 fig,ax = plt.subplots(1,1)
 
 def suptitle_gen(x):
-    title = "nbin/L=" + "5M" + "/" + "10M"+ ', weight=' + str(x.weight)\
-    + ", gamma=" + str(x.gamma) + ", nconf=" + str(x.weight) + ", t=[0,2**26]" 
+    title = "nbin/L=" + "5M" + "/" + "10M" + ", gamma=" + str(x.gamma) + ", nconf=" + str(x.nconf) + ", t=[0,2**26]" 
+   
 
     fig.suptitle(title)
 
 run25 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
 run26 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.99/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
 run94 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.9999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
-#run1 = DataFile("data/linear force/gamma=1.0/weight=0.0/nt=2**26/L=1.5M/nbin=750K")
+run01 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.1/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+run05 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.5/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
 
-ax.set(xlabel='t',ylabel='<r^2>')
+run_wavx = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/weighted avg/intv=[0,2**26]",'avx')
+
+dist1 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=64*32/asymmetric gradient (+1:32)",'avx')
+run1walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=2048*1/asymmetric gradient/intv=[0,2**26]",'avx')
+run2walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=1024*2/asymmetric gradient/intv=[0,2**26]",'avx')
+run4walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=512*4/asymmetric gradient/intv=[0,2**26]",'avx')
+run8walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=256*8/asymmetric symmetric/intv=[0,2**26]",'avx')
+run16walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=128*16/asymmetric gradient/intv=[0,2**26]",'avx')
+run64walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=32*64",'avx')
+run128walker = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128",'avx')
+run1 = DataFile("data/linear force/gamma=1.0/weight=0.0/nt=2**26/L=1.5M/nbin=750K",'avx')
+
+run2walker_rng = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=1024*2/asymmetric gradient/intv=[0,2**26]/IRINT=2048",'avx')
+
+run59 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.99999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+run69 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.999999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+run79 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.9999999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]",'avx')
+run59_norm = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.99999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]/normalized",'avx')
+run69_norm=  DataFile("data/probabilistic force/gamma=1.0/p_accept=0.999999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]/normalized",'avx')
+run79_norm = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.9999999/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]/normalized",'avx')
+run1_norm = DataFile("data/probabilistic force/gamma=1.0/p_accept=1.0/nt=2**26/L=10M (nbin=5M)/intv=[0,2**26]/normalized",'avx')
+
+wavg8 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/weighted avg (w norm)",'avx')
+wavg92 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.99/nt=2**26/L=10M (nbin=5M)/weighted avg (w norm)",'avx')
+wavg94 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.9999/nt=2**26/L=10M (nbin=5M)/weighted avg (w norm)",'avx')
+wavg5 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.5/nt=2**26/L=10M (nbin=5M)/weighted avg (w norm)",'avx')
+
+avg94 = DataFile("figures/winter break/final p_accept/p_accept=0.99/Foundry-2861961.out",["log(p_accept_conf)="])
+avg9 = DataFile("figures/winter break/final p_accept/p_accept=0.9/Foundry-2861965.out",["log(p_accept_conf)="])
+avg8 = DataFile("figures/winter break/final p_accept/p_accept=0.8/Foundry-2861966.out",["log(p_accept_conf)="])
+avg5 = DataFile("figures/winter break/final p_accept/p_accept=0.5/Foundry-2861967.out",["log(p_accept_conf)="])
+avg01 = DataFile("figures/winter break/final p_accept/p_accept=0.1/Foundry-2861971.out",["log(p_accept_conf)="])
+avg03 = DataFile("figures/winter break/final p_accept/p_accept=0.3/Foundry-2861972.out",["log(p_accept_conf)="])
+avg001 = DataFile("figures/winter break/final p_accept/p_accept=0.01/Foundry-2861973.out",["log(p_accept_conf)="])
+avg0001 = DataFile("figures/winter break/final p_accept/p_accept=0.001/Foundry-2861974.out",["log(p_accept_conf)="])
+
+
+avg6_01 = DataFile("figures/winter break/final p_accept/gamma=0.6/p_accept=0.1/Foundry-2862070.out",["log(p_accept)="])
+avg6_05 = DataFile("figures/winter break/final p_accept/gamma=0.6/p_accept=0.5/Foundry-2862059.out",["log(p_accept)="])
+avg6_08 = DataFile("figures/winter break/final p_accept/gamma=0.6/p_accept=0.8/Foundry-2862060.out",["log(p_accept_conf)="])
+avg6_09 = DataFile("figures/winter break/final p_accept/gamma=0.6/p_accept=0.9/Foundry-2862065.out",["log(p_accept_conf)="])
+
+param_test = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/p_accept_conf/Foundry-2869514.out",["log(p_accept)="])
+
+new_pa08 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/nconf=20K",'avx')
+
+testing = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/testing",'avx')
+
+print(max(param_test.markers),sum(param_test.markers)/len(param_test.markers),min(param_test.markers))
+
 x_i = 't'
 y_i = '<r^2>'
+ax.set(xlabel=x_i,ylabel=y_i)
 
 ax.set(xscale='log',yscale='log')
-
-
+ax.set(title='(# set, # walkers/set): mean-squared displacement with error-bars')
+k = (2**26)*(32*64)*(1)*(1/64)*(1/32)
 
 #ax.plot(x.cor['t'],(x.cor['<r^2>']))##
 
 dis25 = run25.avx
 dis26 = run26.avx
 data94 = run94.avx
-#data1 = run1.dis
+data01 = run01.avx
 
-#ax.plot(pos[x_i],pos[y_i],label='nconf=64*32')
-#ax.plot(pos1[x_i],pos1[y_i],label='p_accept=0.8')
-#ax.plot(pos2[x_i],pos2[y_i],label='p_accept=0.95')
-#ax.plot(pos3[x_i],pos3[y_i],label='non-probabilistic')
-#ax.plot(pos4[x_i],pos4[y_i],label='BM')
+data05 = run05.avx
+#data_dist = dist1.dis
+data1 = run1.avx
 
+fit = np.power(10,-0.29153843)*np.power(dis25['t'],1.3354501)
+
+#print((len(fit)))
+tests = [data01,data05,dis25,dis26,data94]
+
+i = 0
+a = np.zeros(len(tests))
+for test in tests:
+       for t in range(0,99):
+              x2_test = test['<r^2>'][t]
+              x2_bm = data1['<r^2>'][t]
+
+              cond = abs(x2_test-x2_bm)/(x2_test+x2_bm) > 0.2
+              higher = (np.log(fit[t]) > np.log(x2_bm)) and (np.log(x2_test) > np.log(x2_bm)) and (np.log(x2_test) < np.log(fit[t]))
+
+              if(cond):
+                     #print(test['t'][t])
+                     a[i] = test['t'][t]
+                     break 
+
+              if(t==98):
+                     a[i] = 0
+                     print("no pass")
+       i += 1
+
+#print(a)
+
+
+
+p_accept = np.array([0.1,0.5,0.8,0.99,0.9999])
+
+p_accept = np.exp(np.exp(-1/(1-p_accept)))
+
+
+
+y_val = np.linspace(10e1,10e9,100)
+
+for i in a:
+       t_range = i*np.ones(100)
+       y_val = np.linspace(1,10e9,100)
+       #ax.plot(t_range,y_val,label='t='+str(i))
+
+'''
+ax.plot(t_range,y_val)
+ax.plot(data01[x_i],data01[y_i], label='p_accept=0.1')
+ax.plot(data05[x_i],data05[y_i], label='p_accept=0.5')
 ax.plot(dis25[x_i],dis25[y_i], label='p_accept=0.8')
-ax.plot(dis26[x_i],dis26[y_i], label='p_accept=0.99')
-ax.plot(data94[x_i],data94[y_i], label='p_accept=0.9999')
-#ax.plot(data1[x_i],data1[y_i], label='BM')
+##ax.plot(dis25[x_i],fit, label='fit')
+ax.plot(dis26[x_i],(dis26[y_i]), label='p_accept=0.99')
+ax.plot(data94[x_i],(data94[y_i]), label='p_accept=0.9999')
+ax.plot(data1[x_i],data1[y_i], label='BM')
+'''
+#ax.plot(data_dist[x_i],k*data_dist[y_i])
+#ax.plot(data01[x_i],abs(fit-data01[y_i]), label='p_accept=0.1')
+#ax.plot(data05[x_i],abs(fit-data05[y_i]), label='p_accept=0.5')
 
-suptitle_gen(run25)
+'''
+                                         
+ax.plot(run25.avx[x_i],run25.avx[y_i],label='unweighted avg')
+ax.plot(run_wavx.avx[x_i],run_wavx.avx[y_i],label='weighted avg')
+'''
+
+
+
+'''
+avg1 = sum(avg94.markers)/len(avg94.markers)
+avg2 = sum(avg9.markers)/len(avg9.markers)
+avg3  = sum(avg8.markers)/len(avg8.markers)
+avg4 = sum(avg5.markers)/len(avg5.markers)
+avg05 = sum(avg01.markers)/len(avg01.markers)
+avg6 = sum(avg03.markers)/len(avg03.markers)
+avg7 = sum(avg001.markers)/len(avg001.markers)
+avg8a = sum(avg0001.markers)/len(avg0001.markers)
+
+print(avg6_08.markers)
+
+avg1_8 = sum(avg6_08.markers)/len(avg6_08.markers)
+avg1_9 =  sum(avg6_09.markers)/len(avg6_09.markers)
+avg1_1 =  sum(avg6_01.markers)/len(avg6_01.markers)
+avg1_5 =  sum(avg6_05.markers)/len(avg6_05.markers)
+
+
+a = [avg8a, avg7, avg05, avg6, avg4, avg3, avg2, avg1]
+p = [0.001, 0.01, 0.1 ,0.3 , 0.5,0.8,0.9,0.99]
+
+a1 = [avg1_1,avg1_5,avg1_8,avg1_9]
+p1 = [0.1,0.5,0.8,0.9]
+
+ax.scatter(np.log(p),a,label='gamma=1.0')
+gen_fit(ax=ax,data_x=np.log(p),data_y=a,interval=[np.log(0.001),np.log(0.99)])
+
+ax.scatter(np.log(p1),a1,label='gamma=0.6')
+
+c1 = np.polyfit(np.log(p1),a1,1)
+s1 = np.poly1d(c1)
+
+x1 = np.linspace(np.log(min(p)),np.log(max(p)))
+'''
+
+
+
+
+#ax.plot(x1,s1(x1),label=s1)
+
+
+
+'''
+ax.plot(run05.avx[x_i],run05.avx[y_i],label='unnorm: paccept=0.5')
+ax.plot(run25.avx[x_i],run25.avx[y_i],label='unnorm: paccept=0.8')
+ax.plot(run26.avx[x_i],run26.avx[y_i],label='unnorm: paccept=0.99')
+ax.plot(run94.avx[x_i],run94.avx[y_i],label='unnorm: paccept=0.99')
+
+#ax.plot(run59_norm.avx[x_i],run59_norm.avx[y_i],label='p_accept=0.99999')
+ax.plot(wavg5.avx[x_i],wavg5.avx[y_i],label='p_accept=0.5')
+ax.plot(wavg8.avx[x_i],wavg8.avx[y_i],label='p_accept=0.8')
+ax.plot(wavg92.avx[x_i],wavg92.avx[y_i],label='p_accept=0.99')
+ax.plot(wavg94.avx[x_i],wavg94.avx[y_i],label='p_accept=0.9999')
+'''
+
+
+#msd_fit(ax=ax,data=[run1_norm],interval=[35921537,60412582])
+
+'''
+ax.plot(run1walker.avx[x_i],run1walker.avx[y_i],label='2048*1')
+ax.plot(run2walker.avx[x_i],run2walker.avx[y_i],label='1024*2')
+ax.plot(run4walker.avx[x_i],run4walker.avx[y_i],label='512*4')
+ax.plot(run8walker.avx[x_i],run8walker.avx[y_i],label='256*8')
+ax.plot(run16walker.avx[x_i],run16walker.avx[y_i],label='128*16')
+ax.plot(dist1.avx[x_i],dist1.avx[y_i],label='64*32')
+ax.plot(run64walker.avx[x_i],run64walker.avx[y_i],label='32*64')
+'''
+
+#b = testing.avx
+#ax.plot(b[x_i],b[y_i])
+
+#plt.show()
+
+
+w = run1walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='2048*1')
+
+w = run2walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='1024*2')
+
+w = run4walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='512*4')
+
+w = run8walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='256*8')
+
+w = run16walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='128*16')
+
+w = dist1.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='64*32')
+
+w = run64walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='32*64')
+
+w = run128walker.avx
+x2 = w["<r^2>"]
+x1 = w["<r>"]
+ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='16*128')
+
+suptitle_gen(run1walker)
+
+
+#ax.plot(new_pa08.avx[x_i],new_pa08.avx[y_i])
+
+ax.legend()
 
 #ax.ploax.plot(pos['t'],pos['<r^2>'])t(dis['ibin'],dis['P(x)'])
 #ax.plot(pos['t'],pos['<r^2>'],label='nconf=64*128')
@@ -53,10 +280,10 @@ suptitle_gen(run25)
 
 #ax.plot(pos3['t'],pos3['<r^2>'],label='nconf=10*64,non-parallel')
 
-log_fit(ax,dis25['t'],dis25['<r^2>'],interval=[35921537,60412582])
+#log_fit(ax,dis25['t'],dis25['<r^2>'],interval=[35921537,60412582])
 
 
-ax.legend()
+#ax.legend()
 #log_fit(ax,g1_w5_steps.cor['t'],g1_w5_steps.cor['<|grad_pos|>'],interval=[8980384,60412582])
 '''
 

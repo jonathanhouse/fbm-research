@@ -32,6 +32,10 @@ PROGRAM soft_fbm
       real(r8b), parameter        :: p_accept = 0.8D0
       logical, parameter          :: WRITE_OUTPUT = .FALSE.
 
+      real(r8b), parameter        :: MAX_LOG_ACCEPT = -3421674.29088
+
+      real(r8b),parameter         :: mapping_coeff = log(HUGE(p_accept)/10**50) - MAX_LOG_ACCEPT ! 3422384.07359
+      real(r8b),parameter         :: cutoff_accept = log(TINY(p_accept)) - mapping_coeff  ! −3423092.48134
 
       real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
@@ -45,7 +49,7 @@ PROGRAM soft_fbm
 
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
       integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
-      integer(i4b), parameter     :: NTSTART=2**26-1000          ! begin and end of measuring distribution
+      integer(i4b), parameter     :: NTSTART=0          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
@@ -245,10 +249,21 @@ PROGRAM soft_fbm
             
            end do time_loop
 
-           sum2xx(:) = exp(p_accept_conf + (1.0e8))*conf2xx(:) + sum2xx(:)
-           sumxx(:) = exp(p_accept_conf + (1.0e8))*confxx(:) + sumxx(:)
+           ! a_max = largest p_accept_conf encountered 
+           ! real_max = largest possible value for an 8byte real 
+           ! m = mean p_accept_conf value 
+           ! ai = i-th p_accept_conf value 
+           ! exp(ai - m)
+
            !write(*,'(A,F0.7)') 'log(p_accept)=', p_accept_conf
-           conf_weight2 = exp(p_accept_conf + (1.0e8)) + conf_weight2
+
+           if (p_accept_conf > cutoff_accept) then 
+                  sum2xx(:) = exp(p_accept_conf + mapping_coeff)*conf2xx(:) + sum2xx(:)
+                  sumxx(:) = exp(p_accept_conf + mapping_coeff)*confxx(:) + sumxx(:)           
+                  conf_weight2 = exp(p_accept_conf + mapping_coeff) + conf_weight2
+           else 
+                  ! do nothing, we don't add the data to the sum 
+           end if 
 
       end do disorder_loop      ! of do inconf=1,NCONF
 

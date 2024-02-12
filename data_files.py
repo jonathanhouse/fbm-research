@@ -20,6 +20,25 @@ class DataFile:
         if(type == 'cor'):
             self.cor = self.get_cor(self.path)
 
+        if(isinstance(type,list)):
+            self.markers = self.parse_gen_data(type[0])
+
+
+
+        
+    def parse_gen_data(self,signal):
+        run_read = open(loc + '/' + self.path,'r').readlines()
+        N = len(run_read)
+        ret_array = np.array([])
+        
+        for i in range(N):
+            line = run_read[i].split()
+            if (len(line) != 0):
+                if line[0] == signal:
+                    ret_array = np.append(ret_array,float(line[1]))
+        
+        return ret_array
+
 
     def parse_data(self, file_name,log_type):
 

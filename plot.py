@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from data_files import DataFile
 from numpy.polynomial.polynomial import Polynomial as Poly
-
+    
 
 def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
     L = data[0].length
@@ -72,7 +72,7 @@ def msd_fit(ax, data, interval):
 
         p.series = series
 
-        ax.plot(10**x_test, 10**series(x_test),marker='x',markersize=3)
+        ax.plot(10**x_test, 10**series(x_test),marker='x',markersize=3,label=str(p.series))
         ax.legend()
 
 
@@ -86,6 +86,21 @@ def log_fit(ax,data_x,data_y,interval):
     series = series.convert()
 
     ax.plot(10**x_test, 10**series(x_test),marker='x',markersize=3,label=series)
+    ax.legend()
+
+    return series 
+
+def gen_fit(ax,data_x,data_y,interval):
+    bound_arr = data_x
+    low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-7)[0][0]
+    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-7)[0][0]
+
+    x_test = np.linspace(interval[0],interval[1],100)
+    series = Poly.fit(data_x[low_bound:high_bound], data_y[low_bound:high_bound], deg=1, window=None)
+    series = series.convert()
+    series = series.convert()
+
+    ax.plot(x_test, series(x_test),markersize=3,label=series)
     ax.legend()
 
     return series 
