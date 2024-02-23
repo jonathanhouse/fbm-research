@@ -32,7 +32,7 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
-
+      integer(i8b), parameter     :: kill_fbm_time = 10           ! turn off fbm steps after this time (=NT for normal FBM)
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
       character(6), parameter     :: FORCE_TYPE = 'LINEAR'         ! Nonlinear tanh = 'NONLIN', Linear force = 'LINEAR'
@@ -56,7 +56,7 @@ PROGRAM soft_fbm
 
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
       integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
-      integer(i4b), parameter     :: NTSTART=2**26-1000          ! begin and end of measuring distribution
+      integer(i4b), parameter     :: NTSTART=0          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
@@ -271,7 +271,12 @@ PROGRAM soft_fbm
 
                         !! Find and store iwalker's new position 
                         old_xx = temp_xx(iwalker)
-                        temp_xx(iwalker) = temp_xx(iwalker) + xix(it) + force_step
+
+                        if (it <= kill_fbm_time) then
+                              temp_xx(iwalker) = temp_xx(iwalker) + xix(it) + force_step
+                        else ! no FBM, purely gradient steps 
+                              temp_xx(iwalker) = temp_xx(iwalker) + force_step
+                        endif
 
                         if (WALL .eq. 'SOFT') then
                               !temp_xx(iwalker) = temp_xx(iwalker) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
@@ -400,6 +405,7 @@ PROGRAM soft_fbm
         write(2,*) 'GRAD_FORM: ', GRAD_FORM
         write(2,*) 'GRAD_DX: ', GRAD_DX
         write(2,*) 'GRAD_TEST: ', GRAD_TEST
+        write(2,*) 'KILL_FBM_TIME=', kill_fbm_time
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
 	  write(2,*) 'WINDOW_WIDTH: ', 2*WINDOW + 1
         write (2,*)'=================================='

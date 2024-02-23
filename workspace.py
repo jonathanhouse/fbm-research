@@ -66,19 +66,45 @@ param_test = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/p_accept_
 
 new_pa08 = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/nconf=20K",'avx')
 
-testing = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/nt=2**26/L=10M (nbin=5M)/testing",'avx')
+
+
+run_g14 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=1.4/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/intv=[0,2*26]",'avx')
+run_g08 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.8/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/intv=[0,2*26]",'avx')
+run_g04 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.4/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/intv=[0,2*26]",'avx')
+run_g06 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.6/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128",'avx')
+run_g1 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=1.0/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/intv=[0,2**26]",'avx')
+run_g07 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.7/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/intv=[0,2*26]",'avx')
+run_g05 = DataFile("data/parallel walkers/procs as sets/linear force/gamma=0.5/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128",'avx')
+
+run_fbm_off = DataFile("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/t_off=10",'avx')
+run_fbm_off4 = DataFile("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/t_off=10 (gamma=0.4)",'avx')
+
+
+test_avx = DataFile("data/probabilistic force/gamma=1.0/p_accept=0.8/test",'avx')
 
 print(max(param_test.markers),sum(param_test.markers)/len(param_test.markers),min(param_test.markers))
+
+
+i = 0
+for n in param_test.markers:
+       if (n >= -3423070.9415688282):
+              print(n)
+              i += 1
+print(i)
 
 x_i = 't'
 y_i = '<r^2>'
 ax.set(xlabel=x_i,ylabel=y_i)
 
 ax.set(xscale='log',yscale='log')
-ax.set(title='(# set, # walkers/set): mean-squared displacement with error-bars')
+ax.set(title='(16 sets, 128 walkers/set): mean-squared displacement with error-bars')
 k = (2**26)*(32*64)*(1)*(1/64)*(1/32)
 
 #ax.plot(x.cor['t'],(x.cor['<r^2>']))##
+
+#                                                       ax.plot(test_avx.avx['t'],test_avx.avx['<r^2>'])
+
+#plt.show()
 
 dis25 = run25.avx
 dis26 = run26.avx
@@ -221,8 +247,78 @@ ax.plot(dist1.avx[x_i],dist1.avx[y_i],label='64*32')
 ax.plot(run64walker.avx[x_i],run64walker.avx[y_i],label='32*64')
 '''
 
-#b = testing.avx
-#ax.plot(b[x_i],b[y_i])
+
+w = run_g04.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=0.4; ' + str(s))
+
+w = run_g05.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=0.5; ' + str(s))
+
+w = run_g06.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=0.6; ' + str(s))
+
+
+w = run_g07.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=0.7; ' + str(s))
+
+w = run_g08.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=0.8; ' + str(s))
+
+w = run_g1.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=1.0; ' + str(s))
+
+w = run_g14.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[1096,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='gamma=1.4; ' + str(s))
+
+w = run_fbm_off.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[10429,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='force-only (gamma_init=1.0,t_off=10); ' + str(s))
+
+w = run_fbm_off4.avx
+x = w['t']
+y1 = w['<r>']
+y2 = w['<r^2>']
+s = log_fit(ax,x,y2,interval=[10429,60412582])
+ax.errorbar(x,y2,yerr=np.sqrt(y2-y1**2),label='force-only (gamma_init=0.4,t_off=10); ' + str(s))
+
+ax.legend()
+
+suptitle_gen(run_g06)
+
+plt.show()
+
+
 
 #plt.show()
 
@@ -230,6 +326,8 @@ ax.plot(run64walker.avx[x_i],run64walker.avx[y_i],label='32*64')
 w = run1walker.avx
 x2 = w["<r^2>"]
 x1 = w["<r>"]
+
+
 ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='2048*1')
 
 w = run2walker.avx
@@ -268,6 +366,7 @@ x1 = w["<r>"]
 ax.errorbar(w[x_i],w[y_i],yerr=np.sqrt(x2-x1**2),label='16*128')
 
 suptitle_gen(run1walker)
+
 
 
 #ax.plot(new_pa08.avx[x_i],new_pa08.avx[y_i])

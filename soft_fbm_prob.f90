@@ -16,6 +16,7 @@ PROGRAM soft_fbm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+      use IEEE_ARITHMETIC
       implicit none
       integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
       integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers 
@@ -34,7 +35,7 @@ PROGRAM soft_fbm
 
       real(r8b), parameter        :: MAX_LOG_ACCEPT = -3421674.29088
 
-      real(r8b),parameter         :: mapping_factor = log(HUGE(p_accept)/10**50) - MAX_LOG_ACCEPT ! 3422384.07359
+      real(r8b),parameter         :: mapping_factor = log(HUGE(p_accept)) - log(1.0D50) - MAX_LOG_ACCEPT ! 3422384.07359
       real(r8b),parameter         :: cutoff_accept = log(TINY(p_accept)) - mapping_factor  ! −3423092.48134
 
       real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
@@ -258,9 +259,20 @@ PROGRAM soft_fbm
            !write(*,'(A,F0.7)') 'log(p_accept)=', p_accept_conf
 
            if (p_accept_conf > cutoff_accept) then 
+            
                   sum2xx(:) = exp(p_accept_conf + mapping_factor)*conf2xx(:) + sum2xx(:)
                   sumxx(:) = exp(p_accept_conf + mapping_factor)*confxx(:) + sumxx(:)           
                   conf_weight2 = exp(p_accept_conf + mapping_factor) + conf_weight2
+
+                  !do test_inc=0,NT
+                  !      if ( .not. ieee_is_finite( exp(p_accept_conf + mapping_factor)*conf2xx(test_inc) ) ) then
+                  !            write(*, '(I9, A,I9, A, E12.3, A, E12.3,A, F0.7 )') iconf, ": infinite w*conf2xx(",& 
+                  !            test_inc ,")=", &
+                  !            exp(p_accept_conf + mapping_factor), '*', conf2xx(test_inc), ' (p_accept=', p_accept_conf
+                  !            exit
+                  !      end if 
+                  !end do 
+
            else 
                   ! do nothing, we don't add the data to the sum 
            end if 
@@ -342,7 +354,7 @@ PROGRAM soft_fbm
         write(2,*) '   time         <r>         <r^2>'      
         it=1
         do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/sum_weight2
+          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/sum_weight2, sum2xx(it)/sum_weight2
           it=max(it+1,nint(outtimefac*it))
         enddo 
         close(2) 
