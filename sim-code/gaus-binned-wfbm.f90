@@ -11,7 +11,7 @@ PROGRAM soft_fbm
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #define PARALLEL
-#define VERSION 'Soft FBM Parallel (procs as sets)'
+#define VERSION 'Soft FBM Gaussian Binned (procs as sets)'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -48,7 +48,9 @@ PROGRAM soft_fbm
       real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
-      real(r8b), parameter        :: STEPSIG=0.05D0             ! sigma of individual step
+      real(r8b), parameter        :: STEPSIG=1.0D0             ! sigma of individual step
+      real(r8b), parameter        :: WALKER_SIGMA = 0.5D0
+      real(r8b), parameter        :: WALKER_WIDTH = WALKER_SIGMA*2.0D0
       character(3)                :: STEPDIS='GAU'                 ! Gaussian = GAU, binary = BIN, box = BOX                   
 
       real(r8b),parameter         :: lambda = 0.2D0/STEPSIG
@@ -56,9 +58,10 @@ PROGRAM soft_fbm
       character(4)                :: WALL = 'HARD'
 
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
-      integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
+      integer(i4b), parameter     :: NBIN =  20000000                   ! 5000000 previously, number of bins for density distribution
       integer(i4b), parameter     :: NTSTART=0          ! begin and end of measuring distribution
       integer(i4b), parameter     :: NTEND=2**26 
+      
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
             
@@ -68,6 +71,7 @@ PROGRAM soft_fbm
 ! Internal constants
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       real(r8b), parameter        :: LBY2=L/2
+      real(r8b), parameter        :: LEN_PER_BIN = LBY2/NBIN
       real(r8b), parameter        :: Pi=3.14159265358979323D0
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -93,9 +97,10 @@ PROGRAM soft_fbm
       real(r8b)	            :: total_step
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
-      integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i                       ! configuration, and time counters   
+      integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i, ibin_lower, ibin_upper                      ! configuration, and time counters   
       integer(i4b)           :: totconf,totsets                         ! actual number of confs
       real(r8b)              :: old_xx
+      real(r8b)              :: k
 
       real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
       real(r8b)              :: temp_xx(1:NWALKS_PER_SET)
@@ -333,8 +338,20 @@ PROGRAM soft_fbm
 
                   !! After we find new pos for every walker, update the shared history distribution !! 
                   do iwalker=1,NWALKS_PER_SET
-                        ibin = nint(temp_xx(iwalker)*NBIN/LBY2)
-                        conf_history(ibin) = conf_history(ibin) + 1.D0/NWALKS_PER_SET
+
+                        do k=-WALKER_WIDTH,WALKER_WIDTH, LEN_PER_BIN 
+                              ibin = nint((temp_xx(iwalker) + k)/LEN_PER_BIN)
+                              if(abs(ibin) .le. NBIN) then 
+                                    conf_history(ibin) = conf_history(ibin) + &
+                                     ( erfcc((k+LEN_PER_BIN)/(WALKER_SIGMA*sqrt(2.0))) - erfcc((k)/(WALKER_SIGMA*sqrt(2.0))))/(2.0*NWALKS_PER_SET)
+                              endif 
+                        end do
+                        ! Supposed that little Gaussian is placed centered around temp_xx(iwalker)
+                        ! We then want to bin the Gaussian, and fill the bin proporitional to the weight of Gaussian it between 
+                        ! ibin and ibin + 1 [temp_xx(iwalker) + k, temp_xx(iwalker) + 2k]. This formula calculates these weights,
+                        ! then also normalizes by NWALKS_PER_SET to keep total addition to the cummulative distribution per time step 
+                        ! always equal to unity
+
                   end do 
 
 		!confxx(it)=confxx(it) + conf_history(0)
@@ -428,6 +445,9 @@ PROGRAM soft_fbm
         write(2,*) 'KILL_FBM_TIME=', kill_fbm_time
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
 	  write(2,*) 'WINDOW_WIDTH: ', 2*WINDOW + 1
+        write(2,*) 'WALKER_SIGMA:', WALKER_SIGMA
+        write(2,*) 'WALKER_WIDTH: ', WALKER_WIDTH
+        write(2,*) 'NBINS: ', NBIN
         write (2,*)'=================================='
         write(2,*) '   time         <r^2>         <r^4>'      
         it=1

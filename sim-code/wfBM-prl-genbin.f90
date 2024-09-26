@@ -11,7 +11,7 @@ PROGRAM soft_fbm
 ! Preprocessor directives
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #define PARALLEL
-#define VERSION 'Soft FBM Parallel (procs as sets)'
+#define VERSION 'Soft FBM Parallel (procs as sets w/ general bin)'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! data types
@@ -32,7 +32,7 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
-      integer(i4b), parameter     :: kill_fbm_time = 2**26           ! turn off fbm steps after this time (=NT for normal FBM)
+      integer(i4b), parameter     :: kill_fbm_time = NT           ! turn off fbm steps after this time (=NT for normal FBM)
       logical, parameter 	    :: RAND_GRAD_DIR = .TRUE.
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
@@ -61,7 +61,7 @@ PROGRAM soft_fbm
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
       integer(i4b), parameter     :: NBIN =  5000000                   ! number of bins for density distribution
       integer(i4b), parameter     :: NTSTART=0          ! begin and end of measuring distribution
-      integer(i4b), parameter     :: NTEND=2**26 
+      integer(i4b), parameter     :: NTEND=NT 
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
             
@@ -230,6 +230,20 @@ PROGRAM soft_fbm
                                     ! increment the gradient variable with the evaluted derivative from each trajectory fed in 
 
                                     grad = sum_gaus_derivs( temp_xx(iwalker,it-1), temp_xx(i,:),it-1)/NWALKS_PER_SET + grad
+
+                                    if (WRITE_OUTPUT) then
+                                          if (myid==0) then
+                                                if (iset==1 .and. iwalker==1) then 
+                        
+                                                      write(*,'(I0, A, I0, A, I0, A, F0.3)')&
+                                                      it, ' : ',&
+                                                      iwalker, ' ; ',&
+                                                      i, ' ;grad= ',&
+                                                      grad
+
+                                                endif
+                                          endif
+                                    end if 
 
                               end do 
 
@@ -520,7 +534,7 @@ PROGRAM soft_fbm
 !   Sum of Gaussian derivatives function
 !!!
 
-      FUNCTION sum_gaus_derivs(x,traj,it) result(deriv)
+      FUNCTION sum_gaus_derivs(x,traj,it) 
 
             integer,parameter      :: r8b= SELECTED_REAL_KIND(P=14,R=99)   ! 8-byte reals
             integer,parameter      :: i4b= SELECTED_INT_KIND(8)            ! 4-byte integers
@@ -531,15 +545,21 @@ PROGRAM soft_fbm
             integer(i4b)           :: i
             real(r8b)              :: deriv
             real(r8b)              :: GAUS_BIN_SIGMA = 1.0D0
+            real(r8b), parameter    :: PI=3.14159265358979323D0
+            real(r8b)              :: sum_gaus_derivs
 
             deriv = 0.0D0
 
             do i = 0, it
 
                   deriv = deriv + & 
-                  (1.0D0/sqrt(Pi * GAUS_BIN_SIGMA))*-2.0D0*(x - traj(i))/GAUS_BIN_SIGMA * exp( -(x - traj(i))**2 / GAUS_BIN_SIGMA )
+                  (1.0D0/sqrt(PI * GAUS_BIN_SIGMA))*-2.0D0*(x - traj(i))/GAUS_BIN_SIGMA * exp( -(x - traj(i))**2 / GAUS_BIN_SIGMA )
+
+                  !write(*,'(A,I0,A,F0.3, A, F0.3, A, F0.3)') 'sum_derivs ft:', it, ';deriv=', deriv, ';traj=', traj(i), ';eval_x=', x
 
             end do 
+
+            sum_gaus_derivs=deriv
 
       END FUNCTION sum_gaus_derivs
 

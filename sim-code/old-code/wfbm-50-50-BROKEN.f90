@@ -32,12 +32,12 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
-      integer(i4b), parameter     :: kill_fbm_time = 2**26           ! turn off fbm steps after this time (=NT for normal FBM)
+      integer(i4b), parameter     :: kill_fbm_time = 10           ! turn off fbm steps after this time (=NT for normal FBM)
       logical, parameter 		:: RAND_GRAD_DIR = .TRUE.
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
       character(6), parameter     :: FORCE_TYPE = 'LINEAR'         ! Nonlinear tanh = 'NONLIN', Linear force = 'LINEAR'
-      character(4), parameter     :: GRAD_FORM = 'SYMM'           ! asymmetric gradient -> ASYM; symmetric gradient -> SYMM
+      character(4), parameter     :: GRAD_FORM = 'ASYM'           ! asymmetric gradient -> ASYM; symmetric gradient -> SYMM
       integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
       integer(i4b), parameter     :: WINDOW = 3		             ! WINDOW*2 + 1 is width of window
       character(4), parameter     :: GRAD_TEST = 'NONE'
@@ -48,7 +48,7 @@ PROGRAM soft_fbm
       real(r8b),parameter         :: L = 10000000.D0                 ! length of interval
       real(r8b),parameter         :: X0= 0.D0                  ! starting point
 
-      real(r8b), parameter        :: STEPSIG=0.05D0             ! sigma of individual step
+      real(r8b), parameter        :: STEPSIG=1.0D0             ! sigma of individual step
       character(3)                :: STEPDIS='GAU'                 ! Gaussian = GAU, binary = BIN, box = BOX                   
 
       real(r8b),parameter         :: lambda = 0.2D0/STEPSIG
@@ -99,6 +99,9 @@ PROGRAM soft_fbm
 
       real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
       real(r8b)              :: temp_xx(1:NWALKS_PER_SET)
+
+	real(r8b)                :: conf_forcestep(1:NT)
+      real(r8b)                :: sum_forcestep(1:NT)
 
       real(r8b), allocatable   :: xxdis(:)                ! density histogram 
       real(r8b), allocatable   :: sumdis(:)
@@ -158,6 +161,8 @@ PROGRAM soft_fbm
       conf2xx(:)=0.D0
       conf_history(:) = 0.D0
       
+	conf_forcestep(:)=0.D0
+
       allocate(walkers_xix(1:NWALKS_PER_SET,1:NT)) ! allocate 2D array to store each walker's FBM steps  
       !walkers_xix(:,:) = 0.D0
 
@@ -222,27 +227,24 @@ PROGRAM soft_fbm
 
                               if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
                                           
-                                    if (RAND_GRAD_DIR .eqv. .true.) then ! use 50-50 determined gradient 
+				            if ((it .gt. kill_fbm_time) .or. RAND_GRAD_DIR) then
 
-                                          grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
+					            grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
                                           if (rkiss05() .lt. 0.5D0) then
                                                 grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
                                           end if 
-                                    
-                                    else ! use FBM determined gradient 
-
-                                          if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
+				  
+                                          else if ( xix(it) .gt. 0.D0 ) then ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
                                                 grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
-                  
+                        
                                           else if ( xix(it) .lt. 0.D0 ) then ! if FBM points leftward, calculate gradient with current and immediate left bin
                                                 grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
-                                                
+                                                      
                                           else ! else, xix=0, so we flip a coin 
                                                 grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
                                                 if (rkiss05() < 0.5D0) then
                                                       grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
                                                 end if 
-                                          end if 
                                     end if 
 
 
@@ -313,6 +315,8 @@ PROGRAM soft_fbm
                               endif
                         end if 
 
+			 conf_forcestep(it) = conf_forcestep(it) + force_step*force_step
+
                         !! Store position data for averaging over !! 
                         confxx(it)=confxx(it) + temp_xx(iwalker)*temp_xx(iwalker)
                         conf2xx(it)=conf2xx(it) + temp_xx(iwalker)*temp_xx(iwalker)*temp_xx(iwalker)*temp_xx(iwalker)
@@ -363,6 +367,8 @@ PROGRAM soft_fbm
             call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
          end if
 
+	call MPI_SEND(conf_forcestep,NT,MPI_DOUBLE_PRECISION,0,4,MPI_COMM_WORLD,ierr)
+
       else ! if we are the parent: 
 
          ! we can use our data as the starting sum data 
@@ -370,10 +376,14 @@ PROGRAM soft_fbm
          sum2xx(:)=conf2xx(:)
          sumdis(:)=xxdis(:)
 
+	 sum_forcestep(:)=conf_forcestep(:)
+
+
          ! and our freed config lists can be use to collect data 
          confxx(:) = 0.D0
          conf2xx(:) = 0.D0
          xxdis(:) = 0.D0
+	 conf_forcestep(:)=0.D0
 
          do id=1,numprocs-1 ! receive data from all other procs, and add to the sum vectors 
             call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
@@ -385,6 +395,10 @@ PROGRAM soft_fbm
                   call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
                   sumdis(:)=sumdis(:)+xxdis(:)
             end if 
+
+	call MPI_RECV(conf_forcestep,NT,MPI_DOUBLE_PRECISION,id,4,MPI_COMM_WORLD,ierr)
+            sum_forcestep(:) = sum_forcestep(:) + conf_forcestep(:)
+
          enddo
 
       endif        
@@ -429,10 +443,10 @@ PROGRAM soft_fbm
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
 	  write(2,*) 'WINDOW_WIDTH: ', 2*WINDOW + 1
         write (2,*)'=================================='
-        write(2,*) '   time         <r^2>         <r^4>'      
+        write(2,*) '   time         <r^2>         <r^4>	<force_step^2>'      
         it=1
         do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/totconf
+          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/totconf, sum_forcestep(it)/totconf
           it=max(it+1,nint(outtimefac*it))
         enddo 
         close(2) 

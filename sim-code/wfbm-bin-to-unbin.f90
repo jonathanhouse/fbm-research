@@ -24,7 +24,7 @@ PROGRAM soft_fbm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Simulation parameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
-      integer(i4b), parameter     :: M=26,NT=2**M               ! number of time steps (in which mu const) 
+      integer(i4b), parameter     :: M=14,NT=2**M               ! number of time steps (in which mu const) 
      
       real(r8b), parameter        :: GAMMA = 1.0D0              ! FBM correlation exponent 
       integer(i4b), parameter     :: NSETS = 16
@@ -32,14 +32,14 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
-      integer(i4b), parameter     :: T_FBM_OFF = 2**26           ! turn off fbm steps after this time (=NT for normal FBM)
+      integer(i4b), parameter     :: T_FBM_OFF = 10           ! turn off fbm steps after this time (=NT for normal FBM)
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
       character(6), parameter     :: FORCE_TYPE = 'LINEAR'         ! Nonlinear tanh = 'NONLIN', Linear force = 'LINEAR'
       character(4), parameter     :: BIN_FORM = 'GAUS'           ! asymmetric gradient -> ASYM; symmetric gradient -> SYMM
                                                                   ! gaussian gradient & binning -> GAUS
-      character(8),parameter      :: GRAD_FORM = 'ASYM5050'
-      integer(i4b),parameter      :: T_BIN_TO_UNBIN = 10**4
+      character(8),parameter      :: GRAD_FORM = 'ASYMFBM'       ! ASYM5050 for random-grad-dir & ASYMFBM for FBM-determined step 
+      integer(i4b),parameter      :: T_BIN_TO_UNBIN = 2**M - 320
 
       integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
       integer(i4b), parameter     :: WINDOW = 3		             ! WINDOW*2 + 1 is width of window
@@ -243,6 +243,24 @@ PROGRAM soft_fbm
                                                 grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the left 
                                           else ! we're at left wall 
                                                 grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN)) ! take gradient to the right 
+                                          end if 
+                                    end if 
+
+                              case('ASYMFBM')
+
+                                    ! if FBM noise points rightward, calculalte gradient with current and immediate right bin
+                                    if ( xix(it) .gt. 0.D0 ) then 
+                                          grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
+
+                                    ! if FBM points leftward, calculate gradient with current and immediate left bin
+                                    else if ( xix(it) .lt. 0.D0 ) then 
+                                          grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
+                                          
+                                    ! else, xix=0, so we flip a coin 
+                                    else 
+                                          grad = ( conf_history(ibin+GRAD_DX) - conf_history(ibin) ) / (GRAD_DX*(LBY2/NBIN))
+                                          if (rkiss05() < 0.5D0) then
+                                                grad = ( conf_history(ibin) - conf_history(ibin-GRAD_DX) ) / (GRAD_DX*(LBY2/NBIN))
                                           end if 
                                     end if 
 

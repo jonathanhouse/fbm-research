@@ -150,8 +150,23 @@ fs_test2 = DataFile1("data/parallel walkers/procs as sets/linear force/grad=gaus
 fs_test3 = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=symm/t_off=10/gamma=1.0/intv=[0,2**12]",grab_dis=False)
 fs_test4 = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asym/50-50-determiner/t_off=10/gamma=1.0/intv=[0,2**26; force-steps]",grab_dis=False)
 
-foff_test1 = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=unbinned/bin-form=gaus/t_off=10/gamma=1.0/intv=[0,2**12]",grab_dis=True)
-fon_test2 = DataFile1("data/parallel walkers/procs as sets/linear force/grad=gaus/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/gamma=1.0/intv=[0,2**12]",grab_dis=True)
+foff_test1 = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=unbinned/bin-form=gaus/t_off=10/gamma=1.0/intv=[0,2**12]",grab_dis=False)
+fon_test2 = DataFile1("data/parallel walkers/procs as sets/linear force/grad=gaus/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/gamma=1.0/intv=[0,2**12]",grab_dis=False)
+
+larger_w_nofbm = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-1.125/grad=unbinned/bin-form=gaus/t_off=10/gamma=1.0/intv=[0,2**12]",grab_dis=False)
+larger_w_wfbm = DataFile1("data/parallel walkers/procs as sets/linear force/grad=gaus/weight=-1.125/t_off=10/gamma=1.0/intv=[0,2**12]",grab_dis=False)
+
+pac_test = DataFile1("data/probabilistic force/paccept-weighted-walk/gamma=1.0/p_accept=0.9999/new-data",grab_dis=False)
+
+test_1a = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asym5050-to-gaus/t_off=10/gamma=1.0/intv=[0,2**10,2**11]",grab_dis=False)
+test_2a = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asym5050-to-gaus/t_off=10/gamma=1.0/asym5050-test",grab_dis=False)
+test_f = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asym5050-to-gaus/t_off=10/gamma=1.0/intv=[0,16064,16384]",grab_dis=False)
+
+old_code_asym5050 = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asym/50-50-determiner/t_off=10/gamma=1.0/intv=[0,1K]",grab_dis=False)
+btu_asymfbm = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asymfBM-to-gaus/t_off=10/gamma=1.0/intv=[0,16064,16384]",grab_dis=False)
+fix_asym5050_fullfbm = DataFile1("data/parallel walkers/procs as sets/linear force/grad=asym/calc-grad=50:50 (FIXED)/weight=-0.25/nt=2**26/L=10M (nbin=5M)/nconf=16*128/gamma=1.0",grab_dis=False)
+
+idk_test = DataFile1("data/parallel walkers/procs as sets/linear force/fbm_off/weight=-0.25/grad=asym/50-50-determiner/t_off=10/gamma=1.0/intv=[0,2**26; force-steps]",grab_dis=False)
 
 print("log1: ", max(log1.markers))
 
@@ -180,20 +195,34 @@ k = (2**26)*(32*64)*(1)*(1/64)*(1/32)
 #figx = pickle.load(open('msd_g8.fig.pickle', 'rb'))
 #figx.show()
 
-x_i = 't'
-y_i = '<r>'
-ax.set(xlabel='lnx',ylabel='ln(P(x))',xscale='linear',yscale='linear')
+x_i = 'time'
+y_i = '<r^2>'
+
+ax.set(xlabel=x_i,ylabel=y_i,xscale='log',yscale='log')
 ax.set_title("16 * 128 walkers: grad_form=unbinned-gaus-sig=1.0; t_off=10")
+
+tests = [old_code_asym5050,test_1a,test_2a,test_f,btu_asymfbm,fix_asym5050_fullfbm,idk_test]
+labels = ["OLD ASYM-5050","asym5050->gaus: [0,2**10,2**11]", "asym5050->gaus: pure ASYM5050 test","asym5050->gaus: [0,16064,16384]","asymFBM->gaus: [0,16064,16384]","asym5050(fix) - t_off=end","other old asym5050"]
+i = 0
+for t in tests: 
+      ax.plot(t.full[x_i],t.full[y_i],label=str(labels[i]))
+      i += 1
+
+log_fit(ax,fix_asym5050_fullfbm.full["time"],fix_asym5050_fullfbm.full["<r^2>"],interval=[117994,7551573])
+log_fit(ax,idk_test.full["time"],idk_test.full["<r^2>"],interval=[117994,7551573])
+suptitle_gen1(test_1a)
+ax.legend()
+plt.show()
 
 print(test75.params)
 
-tests = [foff_test1,fon_test2]
-test_lab = ['fbm off bin_form=gaus,weight=0.25','fbm on bin_form=gaus,weight=0.25','asym-5050']
+tests = [larger_w_nofbm,larger_w_wfbm,fs_test4]
+test_lab = ['fbm off bin_form=gaus,weight=1.125','fbm on bin_form=gaus,weight=1.125','asym-5050']
 
 i = 0
 for t in tests:
       
-      ax.plot(t.full['ibin'],t.full['P(x)'],label=str(test_lab[i]))
+      ax.plot(t.full[x_i],t.full[y_i],label=str(test_lab[i]))
        #log_fit(ax,t.full['time'],t.full['<r^2>'],interval=[1096,3687])
       i += 1
 '''
@@ -201,7 +230,7 @@ log_fit(ax,tests[0].full["time"],tests[0].full["<r^2>"],interval=[1096,3687])
 log_fit(ax,tests[1].full["time"],tests[1].full["<r^2>"],interval=[1096,3687])
 log_fit(ax,tests[3].full["time"],tests[3].full["<r^2>"],interval=[1122548,60412582])
 '''
-suptitle_gen1(fs_test1)
+suptitle_gen1(larger_w_nofbm)
 ax.legend()
 plt.show()
 
