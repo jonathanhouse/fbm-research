@@ -437,17 +437,17 @@ PROGRAM soft_fbm
         write(2,*) 'NSETS=', totsets
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=', totconf
-        write(2,*) 'FORCE_TYPE: ', FORCE_TYPE
-        write(2,*) 'FORCE_TEST: ', FORCE_TEST
-        write(2,*) 'GRAD_FORM: ', GRAD_FORM
-        write(2,*) 'GRAD_DX: ', GRAD_DX
-        write(2,*) 'GRAD_TEST: ', GRAD_TEST
+        write(2,*) 'FORCE_TYPE= ', FORCE_TYPE
+        write(2,*) 'FORCE_TEST= ', FORCE_TEST
+        write(2,*) 'GRAD_FORM= ', GRAD_FORM
+        write(2,*) 'GRAD_DX= ', GRAD_DX
+        write(2,*) 'GRAD_TEST= ', GRAD_TEST
         write(2,*) 'KILL_FBM_TIME=', kill_fbm_time
        ! write(2,*) '<sum(grad)*sum(xix)>', sum_global/totconf
-	  write(2,*) 'WINDOW_WIDTH: ', 2*WINDOW + 1
-        write(2,*) 'WALKER_SIGMA:', WALKER_SIGMA
-        write(2,*) 'WALKER_WIDTH: ', WALKER_WIDTH
-        write(2,*) 'NBINS: ', NBIN
+	  write(2,*) 'WINDOW_WIDTH= ', 2*WINDOW + 1
+        write(2,*) 'WALKER_SIGMA=', WALKER_SIGMA
+        write(2,*) 'WALKER_WIDTH= ', WALKER_WIDTH
+        write(2,*) 'NBINS= ', NBIN
         write (2,*)'=================================='
         write(2,*) '   time         <r^2>         <r^4>'      
         it=1
