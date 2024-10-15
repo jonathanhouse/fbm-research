@@ -86,7 +86,7 @@ def log_fit(ax,data_x,data_y,interval,plot_fit = True):
     series = series.convert()
 
     if (True):
-        ax.plot(10**x_test, 10**series(x_test),marker='*',label=series)
+        ax.plot(10**x_test, 10**series(x_test),markersize=4,marker='*',label=series)
         #ax.plot(x_test, series(x_test),marker='x',markersize=3)
 
     ax.legend()

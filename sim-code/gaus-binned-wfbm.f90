@@ -32,8 +32,8 @@ PROGRAM soft_fbm
       integer(i4b), parameter     :: NCONF=NSETS*NWALKS_PER_SET                    ! number of walkers
 
 
-      integer(i4b), parameter     :: kill_fbm_time = 2**26           ! turn off fbm steps after this time (=NT for normal FBM)
-      logical, parameter 		:: RAND_GRAD_DIR = .TRUE.
+      integer(i4b), parameter     :: kill_fbm_time = NT           ! turn off fbm steps after this time (=NT for normal FBM)
+      logical, parameter          :: RAND_GRAD_DIR = .TRUE.
       real(r8b)                   :: force_weight = -0.25D0        ! multiplied against density gradient (negative as repelled by density)
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
       character(6), parameter     :: FORCE_TYPE = 'LINEAR'         ! Nonlinear tanh = 'NONLIN', Linear force = 'LINEAR'
@@ -60,7 +60,7 @@ PROGRAM soft_fbm
       logical,parameter           :: WRITEDISTRIB = .TRUE.        ! write final radial distribution    
       integer(i4b), parameter     :: NBIN =  20000000                   ! 5000000 previously, number of bins for density distribution
       integer(i4b), parameter     :: NTSTART=0          ! begin and end of measuring distribution
-      integer(i4b), parameter     :: NTEND=2**26 
+      integer(i4b), parameter     :: NTEND=NT 
       
 
       real(r8b), parameter        :: outtimefac=2**0.25D0          ! factor for consecutive output times  
@@ -97,7 +97,7 @@ PROGRAM soft_fbm
       real(r8b)	            :: total_step
       real(r8b)              :: grad                             ! density gradient 
       real(r8b)              :: force_step
-      integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i, ibin_lower, ibin_upper                      ! configuration, and time counters   
+      integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i, ibin_lower, ibin_upper, j                     ! configuration, and time counters   
       integer(i4b)           :: totconf,totsets                         ! actual number of confs
       real(r8b)              :: old_xx
       real(r8b)              :: k
@@ -337,22 +337,40 @@ PROGRAM soft_fbm
                   end do walkers_in_set
 
                   !! After we find new pos for every walker, update the shared history distribution !! 
-                  do iwalker=1,NWALKS_PER_SET
+                  distr_update: do iwalker=1,NWALKS_PER_SET
 
-                        do k=-WALKER_WIDTH,WALKER_WIDTH, LEN_PER_BIN 
-                              ibin = nint((temp_xx(iwalker) + k)/LEN_PER_BIN)
-                              if(abs(ibin) .le. NBIN) then 
+                        ibin = nint((temp_xx(iwalker))/LEN_PER_BIN)
+                        do j=-nint(WALKER_WIDTH/LEN_PER_BIN), nint(WALKER_WIDTH/LEN_PER_BIN)
+
+                              if(abs(ibin + j) .le. NBIN) then !  center bin + offset 
                                     conf_history(ibin) = conf_history(ibin) + &
-                                     ( erfcc((k+LEN_PER_BIN)/(WALKER_SIGMA*sqrt(2.0))) - erfcc((k)/(WALKER_SIGMA*sqrt(2.0))))/(2.0*NWALKS_PER_SET)
-                              endif 
-                        end do
+                                    (erfcc(((ibin + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))) - erfcc(((ibin + j + 1)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))))/(2.0*NWALKS_PER_SET)
+                                    !exp( -((j*LEN_PER_BIN)**2.0D0) / (2.0D0*WALKER_SIGMA**2.0D0)) / (WALKER_SIGMA*sqrt(2*Pi)) / NWALKS_PER_SET * LEN_PER_BIN
+                                    ! P(a <= x <= b) = (erfc(a') - erfc(b'))/2 where a' = (a - \mu)/sqrt(2sigma^2) and b' = ...
+                              end if
+
+
+                        end do 
+
+                        !do k=-WALKER_WIDTH,WALKER_WIDTH, LEN_PER_BIN 
+                        !      ibin = nint((temp_xx(iwalker) + k)/LEN_PER_BIN)
+                        !      if(abs(ibin) .le. NBIN) then 
+                        !            conf_history(ibin) = conf_history(ibin) + &
+
+                        !            (1/WALKER_SIGMA*sqrt(2*Pi))*exp(-())
+
+                                     !( erfcc((k+LEN_PER_BIN)/(WALKER_SIGMA*sqrt(2.0))) - erfcc((k)/(WALKER_SIGMA*sqrt(2.0))))/(2.0*NWALKS_PER_SET)
+                                     
+
+                         !     endif 
+                        !end do
                         ! Supposed that little Gaussian is placed centered around temp_xx(iwalker)
                         ! We then want to bin the Gaussian, and fill the bin proporitional to the weight of Gaussian it between 
                         ! ibin and ibin + 1 [temp_xx(iwalker) + k, temp_xx(iwalker) + 2k]. This formula calculates these weights,
                         ! then also normalizes by NWALKS_PER_SET to keep total addition to the cummulative distribution per time step 
                         ! always equal to unity
 
-                  end do 
+                  end do distr_update
 
 		!confxx(it)=confxx(it) + conf_history(0)
                  !conf2xx(it)=conf2xx(it) + conf_history(100)
