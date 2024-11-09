@@ -493,7 +493,7 @@ PROGRAM soft_fbm
           ! To normalize to WALKS_PER_SET*NT, divide out NSETS to get average walker density, then multiply by LEN_PER_BIN to get cummulative walkers. 
           PP= LEN_PER_BIN*sumdis(ibin)/NSETS 
           PPsym= ( (0.5D0*sumdis(ibin)+0.5D0*sumdis(-ibin))*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
-          Write(2,'(1X,I9,8(2X,E13.6))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
+          Write(2,'(1X,I9,8(2X,E14.7))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
         enddo 
         close(2) 
       endif
