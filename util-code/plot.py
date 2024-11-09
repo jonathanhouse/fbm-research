@@ -76,17 +76,26 @@ def msd_fit(ax, data, interval):
         ax.legend()
 
 
-def log_fit(ax,data_x,data_y,interval,plot_fit = True):
+def log_fit(ax,data_x,data_y,interval,plot_fit = True, weights=None):
     bound_arr = data_x
     low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-7)[0][0]
     high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-7)[0][0]
 
     x_test = np.linspace(np.log10(interval[0]),np.log10(interval[1]),100)
-    series = Poly.fit(np.log10(data_x[low_bound:high_bound]), np.log10(data_y[low_bound:high_bound]), deg=1, window=None)
+    # weights passed in as std. errors -> fit wants them as 1/std.err 
+    series = Poly.fit(np.log10(data_x[low_bound:high_bound]), np.log10(data_y[low_bound:high_bound]), deg=1, window=None, w=1/weights[low_bound:high_bound])
     series = series.convert()
 
+    label = str(series) 
+    if(len(weights)):
+        
+        # computes elements to be summed for xi^2 = sum ( (y_i - f(x_i))^2/sigma_i^2 ) 
+        comps = (10**series(np.log10(data_x[low_bound:high_bound])) - 10**np.log10(data_y[low_bound:high_bound]))**2 / (weights[low_bound:high_bound]**2)
+        print(comps)
+        label += ", $\chi^2=$" + str( np.sum( comps )  ) 
+
     if (True):
-        ax.plot(10**x_test, 10**series(x_test),markersize=4,marker='*',label=series)
+        ax.plot(10**x_test, 10**series(x_test),markersize=4,marker='*',label=label)
         #ax.plot(x_test, series(x_test),marker='x',markersize=3)
 
     ax.legend()

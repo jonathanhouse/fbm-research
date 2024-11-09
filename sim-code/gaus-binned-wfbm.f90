@@ -50,7 +50,7 @@ PROGRAM soft_fbm
 
       real(r8b), parameter        :: STEPSIG=1.0D0             ! sigma of individual step
       real(r8b), parameter        :: WALKER_SIGMA = 0.5D0
-      real(r8b), parameter        :: WALKER_WIDTH = WALKER_SIGMA*2.0D0
+      real(r8b), parameter        :: WALKER_WIDTH = 3.0D0*WALKER_SIGMA
       character(3)                :: STEPDIS='GAU'                 ! Gaussian = GAU, binary = BIN, box = BOX                   
 
       real(r8b),parameter         :: lambda = 0.2D0/STEPSIG
@@ -109,6 +109,7 @@ PROGRAM soft_fbm
       real(r8b), allocatable   :: sumdis(:)
       real(r8b), allocatable   :: auxdis(:) 
       real(r8b)                :: PP,PPsym,x                          ! P(x) 
+      real(r8b)                :: tmp_real = 0.0D0
                         
       real(r8b), allocatable   :: walkers_xix(:,:)
 
@@ -283,7 +284,7 @@ PROGRAM soft_fbm
                               force_step = nonlin_factor*STEPSIG*tanh(force_weight*grad/nonlin_factor) 
 
                         else ! FORCE_TYPE = 'linear'
-                              force_step = force_weight*grad 
+                              force_step = (LEN_PER_BIN*force_weight)*grad/NWALKS_PER_SET ! From mean-interaction notes, A=LEN_PER_BIN*force_weight
                         endif 
 
                         !! Find and store iwalker's new position 
@@ -325,14 +326,13 @@ PROGRAM soft_fbm
 			!confxx(it) = confxx(it) + total_step
 			!conf2xx(it) = conf2xx(it) + total_step*total_step
 
-                        ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! get iwalker's new bin 
-
-                        if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
+                        !ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! get iwalker's new bin 
+                        !if ( (ibin.ge.-NBIN) .and. (ibin.le.NBIN)) then
                               ! record steady-state distribution 
-                              if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
-                                    xxdis(ibin) = xxdis(ibin) + 1.0D0
-                              end if 
-                        end if
+                        !      if( (it.ge.NTSTART) .and. (it.le.NTEND) .and. WRITEDISTRIB) then
+                        !            xxdis(ibin) = xxdis(ibin) + 1.0D0
+                        !      end if 
+                        !end if
 
                   end do walkers_in_set
 
@@ -343,30 +343,25 @@ PROGRAM soft_fbm
                         do j=-nint(WALKER_WIDTH/LEN_PER_BIN), nint(WALKER_WIDTH/LEN_PER_BIN)
 
                               if(abs(ibin + j) .le. NBIN) then !  center bin + offset 
-                                    conf_history(ibin) = conf_history(ibin) + &
-                                    (erfcc(((ibin + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))) - erfcc(((ibin + j + 1)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))))/(2.0*NWALKS_PER_SET)
+
+                                    ! area under Gaussian to add into shared history 
+                                    tmp_real = (erfcc(((ibin + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))) - erfcc(((ibin + j + 1)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))))/(2.0*LEN_PER_BIN)
+                                    conf_history(ibin + j) = conf_history(ibin + j) + tmp_real
+                              
+                                    if( ((it.ge.NTSTART) .and. (it.le.NTEND)) .and. WRITEDISTRIB ) then 
+                                          ! also write distribution to total distribution used in output file  
+                                          xxdis(ibin + j) = tmp_real + xxdis(ibin + j)
+
+                                    end if 
+
                                     !exp( -((j*LEN_PER_BIN)**2.0D0) / (2.0D0*WALKER_SIGMA**2.0D0)) / (WALKER_SIGMA*sqrt(2*Pi)) / NWALKS_PER_SET * LEN_PER_BIN
                                     ! P(a <= x <= b) = (erfc(a') - erfc(b'))/2 where a' = (a - \mu)/sqrt(2sigma^2) and b' = ...
                               end if
-
-
                         end do 
 
-                        !do k=-WALKER_WIDTH,WALKER_WIDTH, LEN_PER_BIN 
-                        !      ibin = nint((temp_xx(iwalker) + k)/LEN_PER_BIN)
-                        !      if(abs(ibin) .le. NBIN) then 
-                        !            conf_history(ibin) = conf_history(ibin) + &
-
-                        !            (1/WALKER_SIGMA*sqrt(2*Pi))*exp(-())
-
-                                     !( erfcc((k+LEN_PER_BIN)/(WALKER_SIGMA*sqrt(2.0))) - erfcc((k)/(WALKER_SIGMA*sqrt(2.0))))/(2.0*NWALKS_PER_SET)
-                                     
-
-                         !     endif 
-                        !end do
                         ! Supposed that little Gaussian is placed centered around temp_xx(iwalker)
-                        ! We then want to bin the Gaussian, and fill the bin proporitional to the weight of Gaussian it between 
-                        ! ibin and ibin + 1 [temp_xx(iwalker) + k, temp_xx(iwalker) + 2k]. This formula calculates these weights,
+                        ! We then want to bin the Gaussian, and fill the bin with a weight proportional to the area of the section of Gaussian above such bin 
+                        ! This erfcc formula calculates these areas,
                         ! then also normalizes by NWALKS_PER_SET to keep total addition to the cummulative distribution per time step 
                         ! always equal to unity
 
@@ -491,10 +486,12 @@ PROGRAM soft_fbm
         write(2,*) 'IRINIT=',IRINIT
         write(2,*) 'NCONF=',totconf
         write (2,*)'=================================='
-        write(2,*) '   ibin    x=(L/2*ibin)/NBIN  x/L   P(x)  P(x)*L  P(|x|)   L/2-x '
+        write(2,*) '   ibin    x  x/L   P(x)  P(x)*L  P(|x|)   L/2-x '
         do ibin=-NBIN,NBIN 
           x= (L/2*ibin)/NBIN
-          PP= (sumdis(ibin)*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
+          ! sumdis(ibin) is parameterized to the summation of cumulative walker densities over all sets.
+          ! To normalize to WALKS_PER_SET*NT, divide out NSETS to get average walker density, then multiply by LEN_PER_BIN to get cummulative walkers. 
+          PP= LEN_PER_BIN*sumdis(ibin)/NSETS 
           PPsym= ( (0.5D0*sumdis(ibin)+0.5D0*sumdis(-ibin))*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
           Write(2,'(1X,I9,8(2X,E13.6))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
         enddo 
