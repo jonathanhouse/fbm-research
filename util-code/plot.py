@@ -5,8 +5,14 @@ from data_files import DataFile
 from numpy.polynomial.polynomial import Polynomial as Poly
     
 
+def signed_square(arr):
+    return np.sign(arr)*np.power(arr,2)
+def signed_sqrt(arr):
+    return np.sign(arr)*np.power(np.abs(arr),0.5)
+
+
 def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
-    L = data[0].length
+    #L = data[0].length
     for d in data: 
 
        # if(d.length != L):
@@ -42,7 +48,7 @@ def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
 
 def ordered_binning(df, binsize):
     px = df.dis["P(x)"]     
-    partitions = int(df.nbin*2/binsize)
+    partitions = int(int(df.params["NBINS"])*2/binsize)
     binned_dis = np.zeros(shape=int(partitions))
     midpoint_bins = np.zeros(shape=int(partitions))
     for n in range(int(partitions)):

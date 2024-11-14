@@ -489,9 +489,10 @@ PROGRAM soft_fbm
         write(2,*) '   ibin    x  x/L   P(x)  P(x)*L  P(|x|)   L/2-x '
         do ibin=-NBIN,NBIN 
           x= (L/2*ibin)/NBIN
-          ! sumdis(ibin) is parameterized to the summation of cumulative walker densities over all sets.
-          ! To normalize to WALKS_PER_SET*NT, divide out NSETS to get average walker density, then multiply by LEN_PER_BIN to get cummulative walkers. 
-          PP= LEN_PER_BIN*sumdis(ibin)/NSETS 
+          ! integral( sumdis(ibin) * dx ) is normalized to the number of time steps.
+          ! To normalize to NT, divide out NSETS to get average set density, NWALKERS_PER_SET to get average time step density.
+          ! now, sum( PP(ibin)*LEN_PER_BIN ) = NT   
+          PP= sumdis(ibin)/(NSETS * NWALKS_PER_SET)
           PPsym= ( (0.5D0*sumdis(ibin)+0.5D0*sumdis(-ibin))*NBIN)/(L/2*totconf*(NTEND-NTSTART+1))
           Write(2,'(1X,I9,8(2X,E14.7))') ibin, x, x/L, PP, PP*L, PPsym, L/2-x 
         enddo 
