@@ -32,6 +32,7 @@ class DataFile1:
                 self.full.update(self.dis)
             if (bool(self.log)):
                 self.full.update(self.log)
+        print("Finished loading " + path)
 
         
 

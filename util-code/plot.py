@@ -11,7 +11,7 @@ def signed_sqrt(arr):
     return np.sign(arr)*np.power(np.abs(arr),0.5)
 
 
-def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
+def plot_binned(ax,fig,data, binsize,label=None,type='linear',linestyle=None):
     #L = data[0].length
     for d in data: 
 
@@ -21,10 +21,10 @@ def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
          #   d.dis["ibin"] = data[0].dis["ibin"]
 
         binned, bin_mid = ordered_binning(df=d,binsize=binsize)
-        return binned,bin_mid
+        
         if type == 'linear':
             ax.set(xscale='linear',yscale='linear')
-            ax.set(xlabel='$x$',ylabel='$P(x)$')
+            ax.set(xlabel='$ibin$',ylabel='$P(x)$')
         if type == 'log':
             ax.set(xscale='linear',yscale='log')
             ax.set(xlabel='$x$',ylabel='$P(x)$')
@@ -32,9 +32,11 @@ def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
             ax.set(xscale='linear',yscale='log')
             ax.set(xlabel='$x^2$',ylabel='$P(x)$')
             bin_mid = bin_mid**2*np.sign(bin_mid)
-        ax.plot(bin_mid,binned,label=d.get_label(label),linestyle=linestyle)
+        return binned,bin_mid
+        ax.plot(bin_mid,binned)#,label=d.get_label(label))
     ax.legend()
 
+    '''
     cols = len(data)
     title = ["nconf","length","gamma","nt","weight","t"]
     sup = "bin width=" + str(int(binsize)) + ", "
@@ -43,12 +45,14 @@ def plot_binned(ax,fig,data, binsize,label,type='linear',linestyle=None):
             sup += str(data[cols-1].get_label(t)) + ", "
     sup = sup[:-2]
     fig.suptitle(t=sup)
+    '''
 
 
 
 def ordered_binning(df, binsize):
     px = df.dis["P(x)"]     
     partitions = int(int(df.params["NBINS"])*2/binsize)
+    print(partitions)
     binned_dis = np.zeros(shape=int(partitions))
     midpoint_bins = np.zeros(shape=int(partitions))
     for n in range(int(partitions)):
@@ -82,6 +86,28 @@ def msd_fit(ax, data, interval):
         ax.legend()
 
 
+def log_fit2(x,y,interval,linear_error):
+    bound_arr = x
+    low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-7)[0][0] # find index where x==interval[0]
+    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-7)[0][0]
+
+    logx = np.log(x)
+    logy = np.log(y)
+
+    logerror = linear_error / x
+    
+    # weights w = 1/sigma, and here we need the logerror because we're fitting to the log data 
+    series,stats = Poly.fit(logx[low_bound:high_bound], logy[low_bound:high_bound], deg=1, window=None, w=1/logerror[low_bound:high_bound],full=True)
+    series = series.convert()
+    chi2 = 0
+    resid = sum((logy- series(logx))**2)
+
+    chi2 = sum( (logy[low_bound:high_bound] - series(logx[low_bound:high_bound]))**2 / logerror[low_bound:high_bound]**2  )
+    #chi2 = sum( (np.exp(logy[low_bound:high_bound]) - np.exp(series(logx[low_bound:high_bound])))**2 / (linear_error[low_bound:high_bound])**2  )
+    print(resid, chi2, stats[0])
+    lin_fit_over_intv = [ [ np.exp(x_i) for x_i in logx[low_bound:high_bound] ] , [ np.exp(series(x_i)) for x_i in logx[low_bound:high_bound] ] ]
+    return lin_fit_over_intv, series, chi2
+
 def log_fit(ax,data_x,data_y,interval,plot_fit = True, weights=None):
     bound_arr = data_x
     low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-7)[0][0]
@@ -89,14 +115,14 @@ def log_fit(ax,data_x,data_y,interval,plot_fit = True, weights=None):
 
     x_test = np.linspace(np.log10(interval[0]),np.log10(interval[1]),100)
     # weights passed in as std. errors -> fit wants them as 1/std.err 
-    series = Poly.fit(np.log10(data_x[low_bound:high_bound]), np.log10(data_y[low_bound:high_bound]), deg=1, window=None, w=1/weights[low_bound:high_bound])
+    series = Poly.fit(np.log10(data_x[low_bound:high_bound]), np.log10(data_y[low_bound:high_bound]), deg=1, window=None, w=1/weights[low_bound:high_bound]**2)
     series = series.convert()
 
     label = str(series) 
     if(len(weights)):
         
         # computes elements to be summed for xi^2 = sum ( (y_i - f(x_i))^2/sigma_i^2 ) 
-        comps = (10**series(np.log10(data_x[low_bound:high_bound])) - 10**np.log10(data_y[low_bound:high_bound]))**2 / (weights[low_bound:high_bound]**2)
+        comps = (10**series(np.log10(data_x[low_bound:high_bound])) - 10**np.log10(data_y[low_bound:high_bound]))**2 / ((data_x[low_bound:high_bound]*weights[low_bound:high_bound])**2)
         print(comps)
         label += ", $\chi^2=$" + str( np.sum( comps )  ) 
 

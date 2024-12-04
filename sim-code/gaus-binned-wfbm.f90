@@ -296,12 +296,13 @@ PROGRAM soft_fbm
                              total_step = force_step
                         endif
 
-		       temp_xx(iwalker) = temp_xx(iwalker) + total_step
+		            temp_xx(iwalker) = temp_xx(iwalker) + total_step  ! update walker's position 
+                        ibin=nint( temp_xx(iwalker) * NBIN/LBY2 ) ! calculate new ibin
 
                         if (WALL .eq. 'SOFT') then
                               !temp_xx(iwalker) = temp_xx(iwalker) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
                         else ! WALL .eq. 'HARD'
-                              if ( abs(temp_xx(iwalker)).gt.LBY2 ) then ! stopping boundaries
+                              if ( abs(ibin).gt.NBIN ) then ! stopping boundaries
                                     temp_xx(iwalker) = temp_xx(iwalker) - total_step  ! undo the step just taken 
                               endif 
                         end if
