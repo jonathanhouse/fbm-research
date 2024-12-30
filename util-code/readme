@@ -1,0 +1,23 @@
+# A newer note on tikzplotlib:
+A patch has been released to tikzplotlib on this issue. A virtual python environment is still very useful:
+```
+python3 -m venv /path/to/env/tikz-env
+source /path/to/env/tikz-env/bin/activate
+pip install tikzplotlib-patched
+```
+Here `python3` is a stand-in for any version. I've tested up to python3.13. Whichever python you create the virtual env with will be the one that becomes the new default `python` inside (test `python --version` after activating)
+
+
+# A note on (old) tikzplotlib: 
+
+See https://stackoverflow.com/questions/52979322/matplotlib-3-0-0-cannot-import-name-get-backend-from-matplotlib. This issue results from Matplotlib 3.6 
+deprecating `pgf.common_texification`. Additionally, tikplotlib is made for python<=3.10. To fix all this, we do two things: 
+
+1. Create a virtual python3.10 environment 
+```
+python3.10 -m venv /path/to/env/tikz-env
+source /path/to/env/tikz-env/bin/activate
+pip install tikzplotlib
+```
+
+2. Fix a line in the tikzplotlib package. Navigate to /tikz-env/lib/python3.10/site-packages/tikzplotlib/_axes.py. Change the import to be like `from matplotlib.backends.backend_pgf import _tex_escape as mpl_common_texification` rather than from `matplotlib.backends.backend_pgf import common_texification as mpl_common_texification`

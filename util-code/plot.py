@@ -89,24 +89,27 @@ def msd_fit(ax, data, interval):
 def log_fit2(x,y,interval,linear_error):
     bound_arr = x
     low_bound = np.nonzero(np.fabs( bound_arr - interval[0]) < 1e-7)[0][0] # find index where x==interval[0]
-    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-7)[0][0]
+    high_bound = np.nonzero(np.fabs( bound_arr - interval[1]) < 1e-7)[0][0] + 1
 
     logx = np.log(x)
     logy = np.log(y)
 
-    logerror = linear_error / x
+    logerror = (linear_error / y)
     
     # weights w = 1/sigma, and here we need the logerror because we're fitting to the log data 
-    series,stats = Poly.fit(logx[low_bound:high_bound], logy[low_bound:high_bound], deg=1, window=None, w=1/logerror[low_bound:high_bound],full=True)
+    series,stats = Poly.fit(logx[low_bound:high_bound], logy[low_bound:high_bound], deg=1, window=None, w=1/logerror[low_bound:high_bound], full=True)
     series = series.convert()
+
     chi2 = 0
     resid = sum((logy- series(logx))**2)
 
     chi2 = sum( (logy[low_bound:high_bound] - series(logx[low_bound:high_bound]))**2 / logerror[low_bound:high_bound]**2  )
-    #chi2 = sum( (np.exp(logy[low_bound:high_bound]) - np.exp(series(logx[low_bound:high_bound])))**2 / (linear_error[low_bound:high_bound])**2  )
-    print(resid, chi2, stats[0])
+    dof = len(logy[low_bound:high_bound]) - 2
+    chi = np.sqrt(chi2/dof)
+    #chi2_lin = sum( (np.exp(logy[low_bound:high_bound]) - np.exp(series(logx[low_bound:high_bound])))**2 / (linear_error[low_bound:high_bound])**2  )
+
     lin_fit_over_intv = [ [ np.exp(x_i) for x_i in logx[low_bound:high_bound] ] , [ np.exp(series(x_i)) for x_i in logx[low_bound:high_bound] ] ]
-    return lin_fit_over_intv, series, chi2
+    return lin_fit_over_intv, series, chi2, chi
 
 def log_fit(ax,data_x,data_y,interval,plot_fit = True, weights=None):
     bound_arr = data_x

@@ -72,6 +72,7 @@ PROGRAM soft_fbm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
       real(r8b), parameter        :: LBY2=L/2
       real(r8b), parameter        :: LEN_PER_BIN = LBY2/NBIN
+      real(r8b), parameter        :: TRUE_BOUND_L = LBY2 + LEN_PER_BIN/2.0D0 ! use for bound checking, stops edge bins from being split 
       real(r8b), parameter        :: Pi=3.14159265358979323D0
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -100,7 +101,7 @@ PROGRAM soft_fbm
       integer(i4b)           :: iconf, it, ibin, w, iset, iwalker, i, ibin_lower, ibin_upper, j                     ! configuration, and time counters   
       integer(i4b)           :: totconf,totsets                         ! actual number of confs
       real(r8b)              :: old_xx
-      real(r8b)              :: k
+      real(r8b)              :: k_tmp
 
       real(r8b)              :: conf_history(-NBIN:NBIN)       ! denisty histogram used for gradient calculations 
       real(r8b)              :: temp_xx(1:NWALKS_PER_SET)
@@ -109,8 +110,8 @@ PROGRAM soft_fbm
       real(r8b), allocatable   :: sumdis(:)
       real(r8b), allocatable   :: auxdis(:) 
       real(r8b)                :: PP,PPsym,x                          ! P(x) 
-      real(r8b)                :: tmp_real = 0.0D0
-                        
+      real(r8b)                :: tmp_real = 0.0D0     
+
       real(r8b), allocatable   :: walkers_xix(:,:)
 
       external               :: kissinit 
@@ -287,24 +288,35 @@ PROGRAM soft_fbm
                               force_step = (LEN_PER_BIN*force_weight)*grad/NWALKS_PER_SET ! From mean-interaction notes, A=LEN_PER_BIN*force_weight
                         endif 
 
+                        
+                        if (it .le. kill_fbm_time) then
+                              total_step = xix(it) + force_step
+                        else ! no FBM, purely gradient steps 
+                              total_step = force_step
+                        endif
+                        
                         !! Find and store iwalker's new position 
                         old_xx = temp_xx(iwalker)
-
-                        if (it .le. kill_fbm_time) then
-                             total_step = xix(it) + force_step
-                        else ! no FBM, purely gradient steps 
-                             total_step = force_step
-                        endif
-
 		            temp_xx(iwalker) = temp_xx(iwalker) + total_step  ! update walker's position 
-                        ibin=nint( temp_xx(iwalker) * NBIN/LBY2 ) ! calculate new ibin
+                        !ibin = nint( temp_xx(iwalker) / LEN_PER_BIN ) ! calculate new ibin
 
-                        if (WALL .eq. 'SOFT') then
-                              !temp_xx(iwalker) = temp_xx(iwalker) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
-                        else ! WALL .eq. 'HARD'
-                              if ( abs(ibin).gt.NBIN ) then ! stopping boundaries
-                                    temp_xx(iwalker) = temp_xx(iwalker) - total_step  ! undo the step just taken 
+                        if (WALL .eq. 'HARD') then
+                              if ( abs(temp_xx(iwalker)).gt.TRUE_BOUND_L ) then ! stopping boundaries; using TRUE_BOUND_L is equivalent to checking bin is in bound 
+
+                                    ! if( temp_xx(iwalker) .gt. 0) then 
+                                    !       k_tmp = conf_history(ibin - 1)
+                                    ! else
+                                    !       k_tmp = conf_history(ibin + 1)
+                                    ! endif 
+                                    ! write(*,'(I0, A, I0, A, I0, A, F0.7,A,F0.10,A,F0.3,A,F0.3,A, F0.3,A,F0.3)')&
+                                    ! iwalker, ', ' ,it, ', ', ibin, ' : ',&
+                                    ! temp_xx(iwalker), ' = ',&
+                                    ! old_xx, ' + ',xix(it), ' + ', force_step, ' : ', conf_history(ibin), ', ', k_tmp
+
+                                    temp_xx(iwalker) = old_xx  ! undo the step just taken 
                               endif 
+                        else if (WALL .eq. 'SOFT') then ! WALL .eq. 'HARD'
+                              !temp_xx(iwalker) = temp_xx(iwalker) + wall_force*exp(-lambda*(xx(it-1)+LBY2)) - wall_force*exp(lambda*(xx(it-1)-LBY2)) 
                         end if
                         
                         if (WRITE_OUTPUT) then
@@ -346,9 +358,15 @@ PROGRAM soft_fbm
                               if(abs(ibin + j) .le. NBIN) then !  center bin + offset 
 
                                     ! area under Gaussian to add into shared history 
-                                    tmp_real = (erfcc(((ibin + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))) - erfcc(((ibin + j + 1)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))))/(2.0*LEN_PER_BIN)
+                                    tmp_real = (erfcc(((ibin - 0.5D0 + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))) - erfcc(((ibin + 0.5D0 + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))))/(2.0*LEN_PER_BIN)
                                     conf_history(ibin + j) = conf_history(ibin + j) + tmp_real
-                              
+                                    
+                                    ! if ((abs(ibin + j) .eq. NBIN) .or. (abs(ibin + j) .eq. (NBIN-1))) then 
+                                    !       write(*,'(I0, A, I0, A, I0, A, F0.7, A, F0.7,A,F0.7,A,I0)')&
+                                    !       iwalker, ', ' ,it, ', ', ibin, ' : ',&
+                                    !       conf_history(ibin + j), ', ', tmp_real, ' : ', temp_xx(iwalker), ', ', j
+                                    ! end if 
+
                                     if( ((it.ge.NTSTART) .and. (it.le.NTEND)) .and. WRITEDISTRIB ) then 
                                           ! also write distribution to total distribution used in output file  
                                           xxdis(ibin + j) = tmp_real + xxdis(ibin + j)
@@ -375,50 +393,66 @@ PROGRAM soft_fbm
 
       end do disorder_loop      ! of do inconf=1,NCONF
 
-      if (myid==0) then
-              tlast=tnow
-              call system_clock(tnow)
-              write(*,'(A,I0,A,I0,A,F0.3,A)') 'parent finished last of ', totsets,&
-                ' sets and starting data collection (took ',(tnow-tlast)/(60*tcount),'&
-                 minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
-      endif
+
 
 !!! AFTER PROC HANDLES ITS SETS, WE CAN COLLECT DATA FROM ALL MACHINES !!! 
 
 #ifdef PARALLEL
-     if (myid.ne.0) then ! if not the parent, send data to the parent 
-         call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
-         call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
 
-         if(WRITEDISTRIB) then
-            call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
-         end if
+      if (myid==0) then
+            tlast=tnow
+            call system_clock(tnow)
+            write(*,'(A,I0,A,I0,A,F0.3,A)') 'parent finished last of ', totsets,&
+            ' sets and starting data collection (took ',(tnow-tlast)/(60*tcount),'&
+            minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
+      endif
 
-      else ! if we are the parent: 
+      call MPI_REDUCE(confxx,  sumxx, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+      call MPI_REDUCE(conf2xx, sum2xx, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+      call MPI_REDUCE(xxdis, sumdis, 2*NBIN+1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
-         ! we can use our data as the starting sum data 
-         sumxx(:)=confxx(:)
-         sum2xx(:)=conf2xx(:)
-         sumdis(:)=xxdis(:)
+      if (myid==0) then
+            tlast=tnow
+            call system_clock(tnow)
+            write(*,'(A,A,I0,A,F0.3,A)') 'id=0: finished data collection',&
+            ' (took ',(tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
+      endif
 
-         ! and our freed config lists can be use to collect data 
-         confxx(:) = 0.D0
-         conf2xx(:) = 0.D0
-         xxdis(:) = 0.D0
+!      if (myid.ne.0) then ! if not the parent, send data to the parent 
+!          call MPI_SEND(confxx,NT,MPI_DOUBLE_PRECISION,0,1,MPI_COMM_WORLD,ierr)
+!          call MPI_SEND(conf2xx,NT,MPI_DOUBLE_PRECISION,0,2,MPI_COMM_WORLD,ierr)
 
-         do id=1,numprocs-1 ! receive data from all other procs, and add to the sum vectors 
-            call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
-            call MPI_RECV(conf2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
-            sumxx(:)=sumxx(:)+confxx(:)
-            sum2xx(:)=sum2xx(:)+conf2xx(:)
+!          if(WRITEDISTRIB) then
+!             call MPI_SEND(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,0,3,MPI_COMM_WORLD,ierr)
+!          end if
 
-            if(WRITEDISTRIB) then
-                  call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
-                  sumdis(:)=sumdis(:)+xxdis(:)
-            end if 
-         enddo
+!       else ! if we are the parent: 
 
-      endif        
+!          ! we can use our data as the starting sum data 
+!          sumxx(:)=confxx(:)
+!          sum2xx(:)=conf2xx(:)
+!          sumdis(:)=xxdis(:)
+
+!          ! and our freed config lists can be use to collect data 
+!          confxx(:) = 0.D0
+!          conf2xx(:) = 0.D0
+!          xxdis(:) = 0.D0
+
+!          do id=1,numprocs-1 ! receive data from all other procs, and add to the sum vectors 
+!             call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
+!             call MPI_RECV(conf2xx,NT,MPI_DOUBLE_PRECISION,id,2,MPI_COMM_WORLD,status,ierr)
+!             sumxx(:)=sumxx(:)+confxx(:)
+!             sum2xx(:)=sum2xx(:)+conf2xx(:)
+
+!             if(WRITEDISTRIB) then
+!                   call MPI_RECV(xxdis,2*NBIN+1,MPI_DOUBLE_PRECISION,id,3,MPI_COMM_WORLD,status,ierr)
+!                   sumdis(:)=sumdis(:)+xxdis(:)
+!             end if 
+!          enddo
+
+!       endif
+      
+      
 #else          
       sumxx(:)=confxx(:)
       sum2xx(:)=conf2xx(:)
