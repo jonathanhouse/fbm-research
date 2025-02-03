@@ -23,6 +23,7 @@ class DataFile1:
             self.avx = self.make_data_dict('avx')
         if (grab_dis):
             self.dis = self.make_data_dict('dis')
+            self.dis["P(|x|)"] = 0.5 * (self.dis["P(x)"] + self.dis["P(x)"][::-1]) # hard code symmetrization of P(x)
         if (grab_log):
             self.log = self.make_data_dict('log')
         if (grab_full):

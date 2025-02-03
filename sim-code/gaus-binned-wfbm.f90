@@ -142,8 +142,8 @@ PROGRAM soft_fbm
       call MPI_INIT(ierr)
       call MPI_COMM_RANK( MPI_COMM_WORLD, myid, ierr )
       call MPI_COMM_SIZE( MPI_COMM_WORLD, numprocs, ierr )
-      totsets=(NSETS/numprocs)*numprocs ! NSETS is integer multiple of numprocs 
-      totconf=totsets*NWALKS_PER_SET
+      totsets=(NSETS/numprocs)*numprocs ! for sets to be partitioned amongst process, force totsets to be integer multiple of numprocs 
+      totconf=totsets*NWALKS_PER_SET ! set new total walkers after totset rounding 
       
       if (myid==0) then
          print *,'Program ',VERSION,' running on', numprocs, ' processes'
@@ -165,13 +165,11 @@ PROGRAM soft_fbm
       conf2xx(:)=0.D0
       conf_history(:) = 0.D0
       
-      allocate(walkers_xix(1:NWALKS_PER_SET,1:NT)) ! allocate 2D array to store each walker's FBM steps  
-      !walkers_xix(:,:) = 0.D0
+      allocate(walkers_xix(1:NWALKS_PER_SET,1:NT)) ! need to keep track of multiple walkers' FBM noise 
 
-!!! EACH PROC LOOPS OVER THEIR SETS !!! 
+! Start of main loop - every process gets a collection of sets labelled by "iset" to compute ! 
 #ifdef PARALLEL
       disorder_loop: do iset=myid+1,totsets,numprocs
-!      if (myid==0) print *, 'dis. conf.', iconf
       if (myid==0) then
             if (iset==1) then 
               call system_clock(tnow,tcount)
@@ -186,13 +184,13 @@ PROGRAM soft_fbm
 
 #else
       disorder_loop: do iset=1,totsets
-!         print *, 'dis. conf.', iconf
+          print *, 'dis. conf.', iconf
 #endif 
 
-      !!! GENERATING FBM STEPS FOR EACH WALKER !!! 
+      ! Generate the FBM noise for each walker 
       xix_generating_loop: do iwalker=1,NWALKS_PER_SET
 
-            iconf = iset*NWALKS_PER_SET - (NWALKS_PER_SET-1) + (iwalker-1) ! find unique iconf number for each walker 
+            iconf = iset*NWALKS_PER_SET - (NWALKS_PER_SET-1) + (iwalker-1) ! find unique number for each walker and label it "iconf" 
             call gkissinit(IRINIT+iconf-1) 
             call corvec(xix,2*NT,M+1,GAMMA)  ! create x-increments (correlated Gaussian random numbers)
             xix(:) = xix(:)*STEPSIG
@@ -207,24 +205,24 @@ PROGRAM soft_fbm
             (tnow-tlast)/(60*tcount),' minutes and ',mod(tnow-tlast,60*tcount)/(tcount*1.D0),' seconds)'
       end if 
 
-            !!! FOR EACH NEW SET, WE MUST: 
+            ! Before letting the set evolve, reset the data arrays 
             conf_history(:) = 0.D0 ! 1. Clear the conf_history 
             conf_history(0) = 0.0D0 ! 2. Initialize starting distribution 
             temp_xx(:) = 0.D0 ! 3. Initialize starting positions for all walkers 
 
-            !!! TIME LOOP !!! 
+            ! Start time evolution on set "iset" 
             time_loop: do it=1, NT
  
-                  !!! OVER EVERY WALKER IN THE SET !!! 
+                  ! Let every walker take a step. The step has FBM and the shared density contributions  
                   walkers_in_set: do iwalker=1,NWALKS_PER_SET
 
-                        ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! calculate starting bin for iwalker 
+                        ibin=nint( temp_xx(iwalker)*NBIN/LBY2 ) ! calculate current bin for "iwalker" 
 
                         grad = 0.D0 ! reset grad in case we went over the wall in soft wall case
 
                         xix(it) = walkers_xix(iwalker,it) ! store current walkers FBM step here 
 
-                        !! Calculate gradient for iwalker !! 
+                        ! Calculate local gradient near "iwalker" 
                         if( (GRAD_FORM .eq. 'ASYM') .and. (GRAD_TEST .eq. 'NONE') ) then
 
                               if( abs(ibin).le.(NBIN-GRAD_DX) ) then ! if within exclusive (-NBIN,NBIN), calculate gradient with current bin and bin in the direction particle wants to move 
@@ -357,8 +355,10 @@ PROGRAM soft_fbm
 
                               if(abs(ibin + j) .le. NBIN) then !  center bin + offset 
 
-                                    ! area under Gaussian to add into shared history 
+                                    ! see erfc notes: uses Gaussian CDF to calculate bin weights 
+                                    ! because bins determined by nint(), their bounds are ibin-0.5 <-> ibin+0.5
                                     tmp_real = (erfcc(((ibin - 0.5D0 + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))) - erfcc(((ibin + 0.5D0 + j)*LEN_PER_BIN - temp_xx(iwalker))/(WALKER_SIGMA*sqrt(2.0))))/(2.0*LEN_PER_BIN)
+                                    
                                     conf_history(ibin + j) = conf_history(ibin + j) + tmp_real
                                     
                                     ! if ((abs(ibin + j) .eq. NBIN) .or. (abs(ibin + j) .eq. (NBIN-1))) then 
@@ -386,9 +386,6 @@ PROGRAM soft_fbm
 
                   end do distr_update
 
-		!confxx(it)=confxx(it) + conf_history(0)
-                 !conf2xx(it)=conf2xx(it) + conf_history(100)
-
             end do time_loop
 
       end do disorder_loop      ! of do inconf=1,NCONF
@@ -409,7 +406,9 @@ PROGRAM soft_fbm
 
       call MPI_REDUCE(confxx,  sumxx, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
       call MPI_REDUCE(conf2xx, sum2xx, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-      call MPI_REDUCE(xxdis, sumdis, 2*NBIN+1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+      if (WRITEDISTRIB) then
+            call MPI_REDUCE(xxdis, sumdis, 2*NBIN+1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+      end if 
 
       if (myid==0) then
             tlast=tnow
@@ -500,7 +499,7 @@ PROGRAM soft_fbm
         write(2,*) '   time         <r^2>         <r^4>'      
         it=1
         do while(it.le.NT)  
-          Write(2,'(1X,I8,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/totconf
+          Write(2,'(1X,I9,6(2X,E13.6))')  it, sumxx(it)/totconf, sum2xx(it)/totconf
           it=max(it+1,nint(outtimefac*it))
         enddo 
         close(2) 
