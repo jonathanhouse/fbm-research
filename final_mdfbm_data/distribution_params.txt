@@ -1,0 +1,27 @@
+alpha=1.0 (force dominated) and alpha=1.5 (FBM dominated)
+force weight = 0.25
+A = force_weight/bins_per_len = 0.025
+walkers per ensemble = 64
+number of ensembles in integrated distributions = 120 
+number of ensembles in instantaneous distributions = 120 (nt=2^27), 480 (nt=2^23,nt=2^25), 1080 (nt=2^14,nt=2^18)
+bins per unit length = 10
+axis length = 1M (default), 3M (alpha=1.5, NT=2^25), 8M (alpha=1.5,NT=2^27)
+
+Rebinning paramaters: 
+
+The "number of bins" is the number of bins between the first and last non-zero data point in each distribution data file. 
+For those distributions that are both scaled and integrated, the "number of bins" parameter is the number of bins 
+between the first non-zero data point of the largest NT distribution (2^27), and the "number of bins" is multiplied
+by a factor of 3/4 for every smaller NT (2^23, 2^25). 
+
+alpha=1.5 integrated distribution: 
+number of bins = 100 (scaled), 50 (unscaled)
+
+alpha=1.5 instantaneous distribution: 
+number of bins = 40 (scaled), 50 (unscaled)
+
+alpha=1.0 integrated distribution: 
+number of bins = 50 (scaled), 30 (unscaled)
+
+alpha=1.0 instantaneous distribution: 
+number of bins = 35 (scaled), 40 (unscaled)

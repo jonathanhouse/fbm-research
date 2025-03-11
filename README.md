@@ -1,15 +1,13 @@
-**Mean-density FBM via Binned Gaussian**: `gaus-binned-wfbm.f90` - Uses a binned shared-history distribution to calculate the gradient, but each walker contributes a little Gaussian to the shared distribution rather than an single bin. 
+## Simulation Versions
+
+**Mean-density FBM via Binned Gaussian**: `mdfbm_binned_gaussians.f90` - Uses a binned shard mean-density distribution to calculate the gradient, but each walker contributes a little Gaussian over multiple bins in the shared distribution rather than to onlya single bin. 
 
 **Mean-density FBM via Analytic (Unbinned) Gaussian:** `wfBM-prl-genbin.f90` - For a given time and walker in the set, a loop over all walkers evalutating `sum_gaus_derivs(x0=x(it-1), traj(i), it-1)` which computes analytically the derivative at point `x0` will be performed. The gradient will be the sum of derivative contributions from all walkers. In this way, the force a walker feels will be proportional to this analytically computed gradient term effected by all walkers in the set. 
 
 **Mean-density FBM via Simple Binning:** `soft_fbm_parallel1-mill.f90` - Walkers contribute a single entry to the shared-history distribution.
 
-`wfbm-bin-to-unbin.f90` - this code attempts to study the behavior of switching from a binned gradient calculation (like asymmetrical binned, symmetrical binned, etc.) to an unbinned version (like analytic Gaussians, etc.). 
 
-
-
-
-On Mill settings: 
+## Mill Cluster Reference
 
 **Compilation settings**
 ```

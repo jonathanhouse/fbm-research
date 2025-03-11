@@ -1,358 +1,188 @@
 from os import walk
 import numpy as np
+from plot import ordered_binning
 
 loc = '/Users/jonhouse/Desktop/research/soft_fbm'
+
 class DataFile: 
 
-    def __init__(self, path, type='base'):
+    def __init__(self,path,grab_avx=True,grab_dis=True,grab_log=False,grab_out=False,grab_full=True, dis_prefix='dis'):
         self.path = path
-        self.weight, self.gamma, self.length, self.nconf, self.nt, self.nbin = 0,0,0,0,0,0
-        self.series = ""
-        self.avx, self.dis, self.log, self.cor = None, None, None, None
-        if(type == 'base'):
-            self.avx, self.dis, self.log,self.cor = self.get_data(self.path)
-        if(type == 'grad'):
-            self.avx, self.dis, self.log = self.get_grad_data(self.path)
-        if(type == 'fast hosking'):
-            self.avx, self.dis, self.log = self.get_fast_hosking_data(self.path)
-        if(type == 'avx'):
-            self.avx = self.get_avx(self.path)
-        if(type == 'cor'):
-            self.cor = self.get_cor(self.path)
+        self.avx = {}
+        self.dis = {}
+        self.log = {}
+        self.full = {}
+        self.gen_out = None # general purpose output 
+        self.tags = {}
+        self.params = {}
 
-        if(isinstance(type,list)):
-            self.markers = self.parse_gen_data(type[0])
+        if (grab_out):
+            self.gen_out = self.make_data_dict('out')
+            return
 
-
+        if (grab_avx):
+            self.avx = self.make_data_dict('avx')
+        if (grab_dis):
+            self.dis = self.make_data_dict(dis_prefix)
+            if "P(x)" in list(self.dis.keys()):
+                self.dis["P(|x|)"] = 0.5 * (self.dis["P(x)"] + self.dis["P(x)"][::-1]) # hard code symmetrization of P(x)
+        if (grab_log):
+            self.log = self.make_data_dict('log')
+        if (grab_full):
+            if (bool(self.avx)):
+                self.full.update(self.avx)
+            if (bool(self.dis)):
+                self.full.update(self.dis)
+            if (bool(self.log)):
+                self.full.update(self.log)
+        print("Finished loading " + path)
 
         
-    def parse_gen_data(self,signal):
-        run_read = open(loc + '/' + self.path,'r').readlines()
-        N = len(run_read)
-        ret_array = np.array([])
-        
-        for i in range(N):
-            line = run_read[i].split()
-            if (len(line) != 0):
-                if line[0] == signal:
-                    ret_array = np.append(ret_array,float(line[1]))
-        
-        return ret_array
 
+    def file_parser(self, filename):
+        run_read = open(loc + '/' + self.path + filename,'r').readlines() # reads each line as a string 
+        num_lines = len(run_read)
 
-    def parse_data(self, file_name,log_type):
+        if (filename == ""):
+            return run_read
 
-        log_info = {'avx':{'signal':'time'},'dis':{'signal':'ibin'},'log':{'signal':')=P(ln(x))/x'},'cor':{'signal':'time'}}
-        run_read = open(file_name,'r').readlines()
-        N = len(run_read)
+        type = filename[0:3] # some files might have longer identifiers so this is just arbitrary
+
         offset = 0
+        for n in range(num_lines):
+            line = run_read[n].split()
+            for z in range(len(line)):
+                if (line[z][-1] == '=' and (z != len(line) - 1)): # if the param ends in an '=" and isn't the long string of them
+                    self.params[line[z][0:-1]] = line[z+1]
+                if (line[z] == '=================================='):
+                    offset = n 
+                    break
+        
+        header = run_read[offset + 1].split()
+        header_len = len(header)
 
-        for i in range(N):
-            line = run_read[i].split()
-            if log_type == 'avx' and line[0] == 'weight':
-                self.weight = float(line[3])
+        data_spaces = num_lines - (offset + 2)
+        file_data = np.empty((header_len,data_spaces),float)
 
-            if log_type == 'avx' and line[0] == 'GAMMMA=':
-                self.gamma = float(line[1])
-
-            if log_type == 'avx' and line[0] == 'L=':
-                self.length = float(line[1])
-
-            if log_type == 'avx' and line[0] == 'NCONF=':
-                self.nconf = int(line[1])
-
-            if log_type == 'avx' and line[0] == "NT=":
-                self.nt = int(line[1])
-
-            if line[0] == log_info[log_type]['signal']:
-                offset = i + 1
-                break
-
-        N = N - offset
-
-        if log_type == 'avx':
-            run_data = np.empty((3,N),float)
-        if log_type == 'dis':
-            run_data = np.empty((7,N),float)
-        if log_type == 'log':
-            run_data = np.empty((7,N),float)
-        if log_type == 'cor':
-            run_data = np.empty((8,N),float)
-
-        for i in range(N):
-            run_data[:,i] = run_read[i+offset].split()
-
+        self.tags[type] = header
         data_dict = {}
-        if log_type == 'avx':
-            data_dict['t'] =        run_data[0,:]
-            data_dict['<r>'] =      run_data[1,:]
-            data_dict['<r^2>'] =    run_data[2,:]
 
-        if log_type == 'dis':
-            data_dict['ibin'] =     run_data[0,:]
-            data_dict['x'] =        run_data[1,:]
-            data_dict['x/L'] =      run_data[2,:]
-            data_dict['P(x)'] =     run_data[3,:]
-            data_dict['P(x)*L'] =   run_data[4,:]
-            data_dict['P(|x|)'] =   run_data[5,:]
-            data_dict['L/2-x'] =    run_data[6,:]
+        for k in range(data_spaces):
+            splits = run_read[k + offset + 2].split()
+            for i in range(len(splits)):
+                try:
+                    file_data[i,k] = splits[i]
+                except ValueError: 
+                    file_data[i,k] = 0
+            #file_data[:,k] = run_read[k + offset + 2].split()
 
-            self.nbin = data_dict['ibin'][0]*-1 # half bins are on left side, and indexing starts negative
-
-        if log_type == 'log':
-            data_dict['ilogbin'] =  run_data[0,:]
-            data_dict['ln(x)'] =    run_data[1,:]
-            data_dict['x'] =        run_data[2,:]
-            data_dict['P(ln(x))'] = run_data[3,:]
-            data_dict['P(x)'] =     run_data[4,:]
-            data_dict['x/L'] =      run_data[5,:]
-            data_dict['P(x)*L'] =   run_data[6,:]
-
-        if log_type == 'cor': 
-            data_dict['t'] = run_data[0,:]
-            data_dict['<r^2>'] = run_data[1,:]
-            data_dict['<xix_pos^2>'] = run_data[2,:]
-            data_dict['<f_grad_pos^2>'] = run_data[3,:]
-            data_dict['<xix_pos*f_grad_pos>'] = run_data[4,:]
-            data_dict['<|xix_pos|>'] = run_data[5,:]
-            data_dict['<|grad_pos|>'] = run_data[6,:]
-            data_dict['norm(<xix_pos*f_grad_pos>)'] = run_data[7,:]
+        for t in range(len(header)):
+            data_dict[header[t]] = file_data[t,:]
 
         return data_dict
 
-    def get_data(self, folder):
-        path = loc + '/' + folder
-        avx, dis, log, cor = None, None, None, None
-        for dirpaths,dirnames,files in walk(path):
+
+
+    def make_data_dict(self,dtype):
+        if (dtype == 'out'):
+            return self.file_parser(str()) # don't need to find file because we just include it in path
+
+        full_path = loc + '/' + self.path
+        save_filename = ''
+        for dirpaths,dirnames,files in walk(full_path):
             for f in files:
-                type = f[0:3] # first three characters of the data log 
-                if type == 'avx':
-                    avx = self.parse_data(path + '/' + f,'avx')
-                elif type == 'dis':
-                    dis = self.parse_data(path + '/' + f, 'dis')
-                elif type == 'log':
-                    log = self.parse_data(path + '/' + f, 'log')
-                elif type == 'cor':
-                    cor = self.parse_data(path + '/' + f, 'cor')
+                type = f[0:len(dtype)] 
+                if type == dtype:
+                    save_filename = f
 
-        return avx, dis, log, cor
-
-
-    def get_avx(self,folder):
-        path = loc + '/' + folder
-        avx = None
-        for dirpaths,dirnames,files in walk(path):
-            for f in files:
-                type = f[0:3] # first three characters of the data log 
-                if type == 'avx':
-                    avx = self.parse_data(path + '/' + f,'avx')
-
-        return avx
-    
-    def get_cor(self,folder):
-        path = loc + '/' + folder
-        cor = None
-        for dirpaths,dirnames,files in walk(path):
-            for f in files:
-                type = f[0:3] # first three characters of the data log 
-                if type == 'cor':
-                    avx = self.parse_data(path + '/' + f,'cor')
-
-        return cor
-    
+        if(save_filename == ''):
+            return None
+        else:
+            return self.file_parser('/' + save_filename)
+        
+    def trim_dis_file(self,binsize,dis_type):
+        prog_title = "Mean-density FBM Gaussian Binned (procs as sets)"
+        desc = ''
+        if(dis_type == 'pdis'):
+            desc = 'Instantaneous probability density distribution'
+        if(dis_type == 'idis'):
+            desc = 'Integrated density distribution'
 
 
-    def get_label(self, label):
-            if label == 'gamma':
-                return "$\gamma$=" + str(self.gamma)
-            if label == 'nconf':
-                return "nconf=" + str(self.nconf)
-            if label == 'length':
-                return "L=" + str(self.length)
-            if label == 'weight': 
-                return "weight=" + str(self.weight)
-            if label == 'nt':
-                return "nt=" + str(self.nt)
-            if label == 'nbin':
-                return "nbin=" + str(self.nbin)
-            if label == "series":
-                return "\n" + str(self.series)
-            if label == 't':
-                # we can use the path name as this specifies the time interval we measure our distribution on 
-                intv_start = self.path.find("[") 
-                intv_end = self.path[intv_start:].find("]")
-                return "t=" + str(self.path[intv_start:intv_start+intv_end+1])
 
-    def parse_grad_data(self, file_name,log_type):
-
-        log_info = {'avx':{'signal':'time'},'dis':{'signal':'ibin'},'log':{'signal':'ilogbin'}}
-        run_read = open(file_name,'r').readlines()
-        N = len(run_read)
-        offset = 0
-
-        for i in range(N):
-            line = run_read[i].split()
-            if log_type == 'avx' and line[0] == 'weight':
-                self.weight = float(line[3])
-
-            if log_type == 'avx' and line[0] == 'GAMMMA=':
-                self.gamma = float(line[1])
-
-            if log_type == 'avx' and line[0] == 'L=':
-                self.length = float(line[1])
-
-            if log_type == 'avx' and line[0] == 'NCONF=':
-                self.nconf = int(line[1])
-
-            if log_type == 'avx' and line[0] == "NT=":
-                self.nt = int(line[1])
-
-            if line[0] == log_info[log_type]['signal']:
-                offset = i + 1
+        low_bound = 0
+        high_bound = 0
+        col_len = 20
+        ep = 1e-10
+        high_bound = len(self.dis["ibin"]) - 1
+        for l in range(len(self.dis["P(|x|)"])):
+            if(self.dis["P(|x|)"][l] > ep):
+                low_bound = l
+                break
+        for h in range(len(self.dis["P(|x|)"])):
+            if(self.dis["P(|x|)"][len(self.dis["P(|x|)"]) - 1 - h] > ep):
+                high_bound = len(self.dis["P(|x|)"]) - 1 - h
                 break
 
-        N = N - offset
+        NT = int(self.params["NT"])
+        filename = f'{dis_type}{NT}.dat'
+        with open(filename, 'w') as file:
+            # Write the header for clarity
+            file.write("Program " + prog_title + '\n')
+            file.write(desc + '\n')
 
-        if log_type == 'avx':
-            run_data = np.empty((4,N),float)
-        if log_type == 'dis':
-            run_data = np.empty((7,N),float)
-        if log_type == 'log':
-            run_data = np.empty((7,N),float)
+            for key in list(self.params.keys()):
+                file.write(f"{key}= {self.params[key]}\n")
+            file.write(f"REBIN_BINWIDTH_FACTOR= {binsize}\n")
 
-        for i in range(N):
-            run_data[:,i] = run_read[i+offset].split()
+            last_avx_idx = len(self.avx["time"]) - 1
+            last_avx_t = int(self.avx["time"][last_avx_idx])
+            last_avx_msd = self.avx["<r^2>"][last_avx_idx]
+            x_rms = np.sqrt(last_avx_msd)
 
-        data_dict = {}
-        if log_type == 'avx':
-            data_dict['t'] =        run_data[0,:]
-            data_dict['<nwalkers>'] =      run_data[1,:]
-            data_dict['<r>'] =    run_data[2,:]
-            data_dict['<r^2>'] =     run_data[3,:]
+            file.write(f"x_rms(t_last={last_avx_t})= {x_rms}\n")
+            file.write("==================================\n")
 
-        if log_type == 'dis':
-            data_dict['ibin'] =     run_data[0,:]
-            data_dict['x'] =        run_data[1,:]
-            data_dict['x/L'] =      run_data[2,:]
-            data_dict['P(x)'] =     run_data[3,:]
-            data_dict['P(x)*L'] =   run_data[4,:]
-            data_dict['P(|x|)'] =   run_data[5,:]
-            data_dict['L/2-x'] =    run_data[6,:]
-
-            self.nbin = data_dict['ibin'][0]*-2 # half bins are on left side, and indexing starts negative
-
-        if log_type == 'log':
-            data_dict['ilogbin'] =  run_data[0,:]
-            data_dict['ln(x)'] =    run_data[1,:]
-            data_dict['x'] =        run_data[2,:]
-            data_dict['P(ln(x))'] = run_data[3,:]
-            data_dict['P(x)'] =     run_data[4,:]
-            data_dict['x/L'] =      run_data[5,:]
-            data_dict['P(x)*L'] =   run_data[6,:]
-
-        return data_dict
-
-    def get_grad_data(self, folder):
-        path = loc + '/' + folder
-        avx, dis, log = None, None, None
-        for dirpaths,dirnames,files in walk(path):
-            for f in files:
-                type = f[0:3] # first three characters of the data log 
-                if type == 'avx':
-                    avx = self.parse_grad_data(path + '/' + f,'avx')
-                elif type == 'dis':
-                    dis = self.parse_grad_data(path + '/' + f, 'dis')
-                elif type == 'log':
-                    log = self.parse_grad_data(path + '/' + f, 'log')
+            key_list = []
+            if(dis_type == 'pdis'):
+                key_list = ['ibin','x','x/x_rms','P(|x|)','x_rms*P']
+            if(dis_type == 'idis'):
+                key_list =  ['ibin','x','x/x_rms','P(|x|)','(x_rms/t_last)P']
 
 
-        return avx, dis, log
-    
+            header=''
+            for key in key_list:
+                header += f" {key:<15}"
+            file.write(header + '\n')
 
-    def parse_fast_hosking_data(self, file_name,log_type):
+            y_prime, bin_prime, x_prime = ordered_binning(df=self,binsize=int(binsize), low_bound=low_bound, high_bound=high_bound)
 
-        log_info = {'avx':{'signal':'time'},'dis':{'signal':'ibin'},'log':{'signal':'ilogbin'}}
-        run_read = open(file_name,'r').readlines()
-        N = len(run_read)
-        offset = 0
+            indices_prime = bin_prime + int(self.params["NBINS"]) # -NBINS + NBINS = 0, NBINS + NBINS=2*NBINS
+            y_prime = y_prime / binsize # keep normalization
 
-        for i in range(N):
-            line = run_read[i].split()
+            data_out = []
+            if(dis_type == 'pdis'):
+                 data_out = [bin_prime,x_prime,x_prime/x_rms,y_prime,(x_rms)*y_prime]
+            if(dis_type == 'idis'):
+                 data_out = [bin_prime,x_prime,x_prime/x_rms,y_prime,(x_rms/last_avx_t)*y_prime]
 
-            if log_type == 'avx' and line[0] == 'GAMMMA=':
-                self.gamma = float(line[1])
+            if(len(y_prime) != len(x_prime)):
+                print("Rebinned to unmatching lengths")
+                return
 
-            if log_type == 'avx' and line[0] == 'L=':
-                self.length = float(line[1])
-
-            if log_type == 'avx' and line[0] == 'NCONF=':
-                self.nconf = int(line[1])
-
-            if log_type == 'avx' and line[0] == "NT=":
-                self.nt = int(line[1])
-
-            if line[0] == log_info[log_type]['signal']:
-                offset = i + 1
-                break
-
-        N = N - offset
-
-        if log_type == 'avx':
-            run_data = np.empty((8,N),float)
-        if log_type == 'dis':
-            run_data = np.empty((7,N),float)
-        if log_type == 'log':
-            run_data = np.empty((7,N),float)
-
-        for i in range(N):
-            run_data[:,i] = run_read[i+offset].split()
-
-        data_dict = {}
-        if log_type == 'avx':
-            data_dict['t'] =                run_data[0,:]
-            data_dict['configs'] =          run_data[1,:]
-            data_dict['<nwalkers>'] =       run_data[2,:]
-            data_dict['<std.dev.nw>'] =     run_data[3,:]
-            data_dict['<r>'] =              run_data[4,:]
-            data_dict['<r^2>'] =            run_data[5,:]
-            data_dict['std.dev.r'] =        run_data[6,:]
-            data_dict['std.dev.r^2'] =      run_data[7,:]
-
-        if log_type == 'dis':
-            data_dict['ibin'] =     run_data[0,:]
-            data_dict['x'] =        run_data[1,:]
-            data_dict['x/L'] =      run_data[2,:]
-            data_dict['P(x)'] =     run_data[3,:]
-            data_dict['P(x)*L'] =   run_data[4,:]
-            data_dict['P(|x|)'] =   run_data[5,:]
-            data_dict['L/2-x'] =    run_data[6,:]
-
-            self.nbin = data_dict['ibin'][0]*-2 # half bins are on left side, and indexing starts negative
-
-        if log_type == 'log':
-            data_dict['ilogbin'] =  run_data[0,:]
-            data_dict['ln(x)'] =    run_data[1,:]
-            data_dict['x'] =        run_data[2,:]
-            data_dict['P(ln(x))'] = run_data[3,:]
-            data_dict['P(x)'] =     run_data[4,:]
-            data_dict['x/L'] =      run_data[5,:]
-            data_dict['P(x)*L'] =   run_data[6,:]
-
-        return data_dict
-
-    def get_fast_hosking_data(self, folder):
-        path = loc + '/' + folder
-        avx, dis, log = None, None, None
-        for dirpaths,dirnames,files in walk(path):
-            for f in files:
-                type = f[0:3] # first three characters of the data log 
-
-                if type == 'avx':
-                    avx = self.parse_fast_hosking_data(path + '/' + f,'avx')
-                elif type == 'dis':
-                    dis = self.parse_fast_hosking_data(path + '/' + f, 'dis')
-                elif type == 'log':
-                    log = self.parse_fast_hosking_data(path + '/' + f, 'log')
+            for i,bin in enumerate(bin_prime):
+                row = ''
+                for d in data_out:
+                    row += f" {d[i]:13.6E}  "
+                file.write(row + '\n')
 
 
-        return avx, dis, log
+            # file.write(f"{'x':<col_len}{'P(|x|)'}\n")
+            
+        print(f"Output saved to {filename}")    
+
+        
+
+
+
+
