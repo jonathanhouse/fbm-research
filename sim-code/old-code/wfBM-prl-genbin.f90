@@ -342,15 +342,19 @@ PROGRAM soft_fbm
          ! we can use our data as the starting sum data 
          sumxx(:)=confxx(:)
          sum2xx(:)=conf2xx(:)
-         sumdis(:)=xxdis(:)
-
+         
          sum_forcestep(:)=conf_forcestep(:)
-
+         
          ! and our freed config lists can be use to collect data 
          confxx(:) = 0.D0
          conf2xx(:) = 0.D0
-         xxdis(:) = 0.D0
          conf_forcestep(:)=0.D0
+         
+         if(WRITEDISTRIB) then
+            sumdis(:)=xxdis(:)
+            xxdis(:) = 0.D0
+         endif
+
 
          do id=1,numprocs-1 ! receive data from all other procs, and add to the sum vectors 
             call MPI_RECV(confxx,NT,MPI_DOUBLE_PRECISION,id,1,MPI_COMM_WORLD,status,ierr)
