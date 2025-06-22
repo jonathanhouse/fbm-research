@@ -339,7 +339,7 @@ endif
 
 call MPI_REDUCE(confxx,  sumxx, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 call MPI_REDUCE(conf2xx, sum2xx, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-call MPI_REDUCE(conf_forcestep, sum_forcestep, NT, MPI_DOUBLE_PRECISION, 0 ,MPI_COMM_WORLD,ierr)
+call MPI_REDUCE(conf_forcestep, sum_forcestep, NT, MPI_DOUBLE_PRECISION, MPI_SUM, 0 ,MPI_COMM_WORLD,ierr)
 if (WRITEDISTRIB) then
       call MPI_REDUCE(xxdis, sumdis, 2*NBIN+1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 end if 
