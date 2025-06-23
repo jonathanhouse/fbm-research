@@ -46,8 +46,8 @@ PROGRAM mdfbm
       integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
       logical, parameter          :: OUTPUT_DEBUG = .FALSE.
 
-      real(r8b),parameter         :: L = 1000000.D0               ! Length of interval
-      integer(i4b), parameter     :: NBIN =  5000000              ! Number of bins in interval; 2*NBINS/L=10 works well for mean-density interaction
+      real(r8b),parameter         :: L = 1.0D6               ! Length of interval
+      integer(i4b), parameter     :: NBIN =  INT(5.0D0 * L)              ! Number of bins in interval; 2*NBINS/L=10 works well for mean-density interaction
       real(r8b),parameter         :: X0= 0.D0                     ! Walker's starting position
 
       real(r8b), parameter        :: STEPSIG=1.0D0                ! sigma of individual step
