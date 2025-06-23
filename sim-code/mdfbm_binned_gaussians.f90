@@ -281,7 +281,7 @@ PROGRAM mdfbm
                               ! walker is at the wall -> asymmetric one-bin diff formula 
                               else 
 
-                                    if (ibin .gt 0) then ! walker is at rightmost wall 
+                                    if (ibin .gt. 0) then ! walker is at rightmost wall 
                                           grad = conf_history(ibin) - conf_history(ibin - 1)
                                           grad = grad / LEN_PER_BIN
                                     else ! walker is at leftmost wall 
