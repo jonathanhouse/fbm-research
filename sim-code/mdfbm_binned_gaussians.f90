@@ -42,7 +42,7 @@ PROGRAM mdfbm
 
       real(r8b), parameter        :: nonlin_factor = 1.D0         ! a*tanh(x/a) where a is nonlinear scale 
       character(6), parameter     :: FORCE_TYPE = 'LINEAR'        ! Nonlinear tanh = 'NONLIN', Linear force = 'LINEAR'
-      character(4), parameter     :: GRAD_FORM = 'SYMM'           ! asymmetric gradient formula -> ASYM; symmetric gradient formula -> SYMM
+      character(4), parameter     :: GRAD_FORM = 'SYMM2'           ! asymmetric gradient formula -> ASYM; symmetric gradient formula -> SYMM
       integer(i4b), parameter     :: GRAD_DX = 1                  ! step used in gradient formula : ex. GRAD_DX=1 w/ SYMM is two-point symmetric formula 
       logical, parameter          :: OUTPUT_DEBUG = .FALSE.
 
@@ -262,6 +262,36 @@ PROGRAM mdfbm
                               end if 
 
                         end if 
+
+
+                        if(GRAD_FORM .eq. 'SYMM2') then 
+
+                              ! stick to convention of rightmost bin 
+
+                              ! if walker is at least two bins away from wall -> O(dx^4) centered diff formula 
+                              if( abs(ibin) .le. (NBIN - 2) ) then 
+                                    grad = -conf_history(ibin + 2) + 8*conf_history(ibin + 1) - 8*conf_history(ibin - 1) + conf_history(ibin - 2)
+                                    grad = grad / (12.0D0 * LEN_PER_BIN)
+
+                              ! if walker is at least one bin away from wall -> O(dx^2) centered diff formula 
+                              else if( abs(ibin) .le. (NBIN - 1) ) then 
+                                    grad = conf_history(ibin + 1) - conf_history(ibin - 1)
+                                    grad = grad / (2.0D0 * LEN_PER_BIN)
+
+                              ! walker is at the wall -> asymmetric one-bin diff formula 
+                              else 
+
+                                    if (ibin .gt 0) then ! walker is at rightmost wall 
+                                          grad = conf_history(ibin) - conf_history(ibin - 1)
+                                          grad = grad / LEN_PER_BIN
+                                    else ! walker is at leftmost wall 
+                                          grad = conf_history(ibin + 1) - conf_history(ibin)
+                                          grad = grad / LEN_PER_BIN
+                                    endif 
+
+                              endif 
+
+                        endif 
 
 
                         !! Calculate step from gradient term !! 
